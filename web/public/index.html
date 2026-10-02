@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="單字">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/ui.css">
+<title>單字複習</title>
+</head>
+<body>
+<header>
+  <button id="back" class="icon" hidden aria-label="返回">‹</button>
+  <h1 id="title">單字複習</h1>
+  <div id="actions"></div>
+  <button id="sync" class="chip" title="同步">同步</button>
+</header>
+
+<main><section id="view"></section></main>
+
+<footer id="bar">
+  <button id="show" class="primary">顯示答案</button>
+  <div id="rates" hidden>
+    <button data-r="0" class="r0"><b>重來</b><small></small></button>
+    <button data-r="1" class="r1"><b>困難</b><small></small></button>
+    <button data-r="2" class="r2"><b>良好</b><small></small></button>
+    <button data-r="3" class="r3"><b>簡單</b><small></small></button>
+  </div>
+</footer>
+
+<nav id="nav">
+  <a href="#/" data-tab="decks"><span>▤</span>牌組</a>
+  <a href="#/browse" data-tab="browse"><span>⌕</span>瀏覽</a>
+  <a href="#/add" data-tab="add"><span>＋</span>新增</a>
+  <a href="#/stats" data-tab="stats"><span>▥</span>統計</a>
+  <a href="#/more" data-tab="more"><span>⋯</span>更多</a>
+</nav>
+
+<dialog id="dialog"></dialog>
+<div id="toast" hidden></div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

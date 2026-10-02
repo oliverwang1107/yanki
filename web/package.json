@@ -1,0 +1,16 @@
+{
+  "name": "anki-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "seed": "node tools/make_seed.mjs",
+    "test:wasm": "node tools/test_wasm.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  },
+  "overrides": {
+    "@cloudflare/workerd-windows-64": "file:./vendor/workerd-windows-64.tgz"
+  }
+}

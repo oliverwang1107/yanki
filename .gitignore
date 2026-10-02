@@ -1,0 +1,38 @@
+# ===== 祕密：絕對不能進版本控制 =====
+.dev.vars
+.prod-token
+.prod-token.*
+*.token
+.env
+.env.*
+
+# ===== 你的個人資料與備份 =====
+# （Anki 匯出、資料庫備份、種子檔、字典待辦清單都來自你的牌組或含使用者資料）
+# 只保留我產生的字典內容 web/data/dict/*.jsonl
+web/data/*
+!web/data/dict/
+web/data/dict/*
+!web/data/dict/*.jsonl
+
+# ===== 太大或可重新產生的東西 =====
+node_modules/
+.wrangler/
+# 下載被中斷時用的 workerd 備份檔（33MB），見 web/README.md
+web/vendor/
+# 幾千個音檔（111MB，來自你的牌組），用 tools/export_anki.py --media 從 Anki 複製
+web/public/media/
+web/wasm/target/
+# 用你的收藏產生的對照答案，用 tools/make_oracle.py 重建
+web/wasm/tests/oracle.json
+
+# ===== 自動產生的個人進度報告 =====
+進度報告.html
+anki-progress.html
+
+# ===== 編輯器與系統 =====
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+*.log
+__pycache__/
+*.pyc

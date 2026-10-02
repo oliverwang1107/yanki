@@ -1,0 +1,11 @@
+{
+  "name": "anki-web",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-10-01",
+  // 只開放自己的網域，不開 workers.dev。DNS 與憑證由 Cloudflare 自動建立。
+  "workers_dev": false,
+  "routes": [{ "pattern": "yanki.yaya1107.dpdns.org", "custom_domain": true }],
+  // 所有請求（含 mp3）都先經過 Worker 驗證，沒登入就拿不到任何檔案。
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "anki-web", "database_id": "96846dff-9b35-4fc5-937b-6a4b968c18ae" }]
+}
