@@ -83,15 +83,40 @@ export function plan(rootId, { done = doneToday(), groups = groupCards() } = {})
   return { ids, learning, rev, new: newc };
 }
 
-// 牌組列表用：每個牌組的新卡／學習／複習數量，以及整個子樹的卡片總數。
+// 每個牌組（含子牌組）的完成進度：total = 全部卡片，left = 還沒學過的新卡，seen = total - left。
+// 和統計頁的「目標進度」同一個算法（只看卡片型態，不管暫停與否）。
+export function deckProgress() {
+  const own = new Map();
+  for (const c of store.cards.values()) {
+    const e = own.get(c.did) ?? { total: 0, left: 0 };
+    e.total++;
+    if (c.type === 0) e.left++;
+    own.set(c.did, e);
+  }
+  return new Map(
+    index.decks.map((d) => {
+      let total = 0;
+      let left = 0;
+      for (const [id, e] of own) {
+        const sub = index.deckById.get(id);
+        if (sub && inTree(sub, d)) {
+          total += e.total;
+          left += e.left;
+        }
+      }
+      return [d.id, { total, left, seen: total - left }];
+    })
+  );
+}
+
+// 牌組列表用：每個牌組的新卡／學習／複習數量，以及整個子樹的卡片總數與完成進度。
 export function deckCounts() {
   const done = doneToday();
   const groups = groupCards();
-  const totals = new Map();
-  for (const c of store.cards.values()) totals.set(c.did, (totals.get(c.did) ?? 0) + 1);
+  const progress = deckProgress();
   return index.decks.map((d) => {
-    const total = [...totals].filter(([id]) => inTree(index.deckById.get(id), d)).reduce((a, [, n]) => a + n, 0);
+    const { total, left, seen } = progress.get(d.id);
     const p = plan(d.id, { done, groups });
-    return { deck: d, depth: depth(d), total, new: p.new.length, learn: p.learning.length, due: p.rev.length };
+    return { deck: d, depth: depth(d), total, left, seen, new: p.new.length, learn: p.learning.length, due: p.rev.length };
   });
 }

@@ -113,6 +113,14 @@ dialog#dialog::backdrop { background: #0008; }
 table.simple { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.simple td, table.simple th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
 table.simple td:first-child, table.simple th:first-child { text-align: left; }
+.deck-prog { padding: 6px 10px 10px; overflow-x: auto; }
+.dp-table th { font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; }
+.dp-table th.on { color: var(--primary); }
+.dp-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dp-table .dp-name { text-align: left; white-space: normal; }
+.dp-table .dp-pct { min-width: 96px; }
+.dp-table .dp-pct .progress { display: inline-block; vertical-align: middle; width: 54px; height: 6px; margin: 0 6px 0 0; }
+.dp-tog { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border: 0; background: none; color: var(--muted); padding: 0; font-size: 14px; cursor: pointer; }
 
 /* ---------- 複習畫面 ---------- */
 .studybar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }

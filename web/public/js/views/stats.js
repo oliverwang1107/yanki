@@ -1,5 +1,6 @@
 // 統計：今天、近 30 天、未來到期預測、卡片狀態、間隔分布、保留率、熱度圖，以及各目標的進度。
 import { dayOf, index, inTree, shortName, store, today } from "../core.js";
+import { deckProgress } from "../plan.js";
 import { SearchError, search } from "../search.js";
 import { $, esc, openDialog, setHeader, toast } from "../ui.js";
 
@@ -68,6 +69,108 @@ function goalHtml(g) {
     </div></div>`;
 }
 
+// 各牌組（含子牌組）的完成進度：已學 = 不再是新卡的張數，剩 = 還沒學過的新卡。
+// 互動表格：點欄位標題排序（同一層內排序，階層不打亂）、點 ▾ 收合／展開子牌組。選了某個牌組就只列它和底下的子牌組。
+const DP_KEY = "stats-progress-ui";
+const DP_COLS = [
+  ["name", "牌組"],
+  ["pct", "完成"],
+  ["seen", "已學"],
+  ["left", "剩餘"],
+  ["total", "總數"],
+];
+function loadDpUi() {
+  try {
+    const s = JSON.parse(localStorage.getItem(DP_KEY) ?? "null");
+    if (s && typeof s === "object") return { sort: s.sort ?? "name", dir: s.dir ?? 1, collapsed: new Set(s.collapsed ?? []) };
+  } catch {}
+  return { sort: "name", dir: 1, collapsed: new Set() };
+}
+
+function deckProgressHtml(root) {
+  const progress = deckProgress();
+  if (!index.decks.some((d) => progress.get(d.id).total > 0 && (!root || inTree(d, root)))) return "";
+  return `<h2${root || !loadGoals().length ? ' style="margin-top:0"' : ""}>各牌組進度</h2><div class="card-box deck-prog" id="dp"></div>`;
+}
+
+function mountDeckTable(box, root) {
+  if (!box) return;
+  const ui = loadDpUi();
+  const save = () => {
+    try {
+      localStorage.setItem(DP_KEY, JSON.stringify({ sort: ui.sort, dir: ui.dir, collapsed: [...ui.collapsed] }));
+    } catch {}
+  };
+  const draw = () => {
+    const progress = deckProgress();
+    const decks = index.decks.filter((d) => progress.get(d.id).total > 0 && (!root || inTree(d, root)));
+    const names = new Set(decks.map((d) => d.name));
+    const parentOf = (d) => {
+      const parts = d.name.split("::");
+      for (let i = parts.length - 1; i > 0; i--) {
+        const p = parts.slice(0, i).join("::");
+        if (names.has(p)) return p;
+      }
+      return null;
+    };
+    const kids = new Map();
+    for (const d of decks) {
+      const p = parentOf(d);
+      kids.set(p, [...(kids.get(p) ?? []), d]);
+    }
+    const key = (d) => {
+      const p = progress.get(d.id);
+      return ui.sort === "pct" ? p.seen / p.total : p[ui.sort];
+    };
+    const order = (list) => (ui.sort === "name" ? list : [...list].sort((a, b) => (key(a) - key(b)) * ui.dir || a.name.localeCompare(b.name)));
+    if (ui.sort === "name" && ui.dir < 0) kids.forEach((v, k) => kids.set(k, [...v].reverse()));
+    const rows = [];
+    const walk = (parent, lv) => {
+      for (const d of order(kids.get(parent) ?? [])) {
+        const has = (kids.get(d.name) ?? []).length > 0;
+        rows.push({ d, lv, has });
+        if (has && !ui.collapsed.has(d.id)) walk(d.name, lv + 1);
+      }
+    };
+    // 最上層：沒有任何上層牌組在列表中的牌組
+    const tops = decks.filter((d) => parentOf(d) === null);
+    kids.set(null, tops);
+    walk(null, 0);
+    const sumLeft = tops.reduce((a, d) => a + progress.get(d.id).left, 0);
+    const sumTotal = tops.reduce((a, d) => a + progress.get(d.id).total, 0);
+    const head = DP_COLS.map(([k, label]) => `<th data-sort="${k}" class="${ui.sort === k ? "on" : ""}">${label}${ui.sort === k ? (ui.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("");
+    box.innerHTML = `<table class="simple dp-table"><thead><tr>${head}</tr></thead><tbody>${rows
+      .map(({ d, lv, has }) => {
+        const p = progress.get(d.id);
+        const pct = (p.seen / p.total) * 100;
+        const open = !ui.collapsed.has(d.id);
+        return `<tr><td class="dp-name" style="padding-left:${8 + lv * 16}px">${has ? `<button class="dp-tog" data-tog="${d.id}" aria-label="${open ? "收合" : "展開"}">${open ? "▾" : "▸"}</button>` : `<span class="dp-tog"></span>`}${esc(shortName(d))}</td>
+          <td class="dp-pct"><div class="progress"><div style="width:${pct}%"></div></div><span>${Math.round(pct)}%</span></td>
+          <td>${p.seen}</td><td class="${p.left ? "" : "muted"}">${p.left || "✓"}</td><td class="muted">${p.total}</td></tr>`;
+      })
+      .join("")}</tbody></table>
+      <p class="small muted" style="margin:8px 0 0">已學 = 不再是新卡；剩餘 = 還沒學過的新卡。合計 ${sumTotal - sumLeft} / ${sumTotal}，剩 ${sumLeft}。點標題可排序，點 ▾ 收合子牌組。</p>`;
+  };
+  box.onclick = (e) => {
+    const th = e.target.closest("[data-sort]");
+    const tog = e.target.closest("[data-tog]");
+    if (th) {
+      const k = th.dataset.sort;
+      if (ui.sort === k) ui.dir = -ui.dir;
+      else {
+        ui.sort = k;
+        ui.dir = k === "name" || k === "pct" ? 1 : -1; // 數字欄第一次點是「大到小」；完成度則先看最落後的
+      }
+    } else if (tog) {
+      const id = Number(tog.dataset.tog);
+      ui.collapsed.has(id) ? ui.collapsed.delete(id) : ui.collapsed.add(id);
+    } else return;
+    save();
+    draw();
+  };
+  draw();
+}
+
 export function mount(el) {
   setHeader({ title: "統計", actions: [{ label: "目標設定", onClick: editGoals }] });
   let deckId = Number(localStorage.getItem("stats-deck")) || 0;
@@ -116,6 +219,7 @@ export function mount(el) {
     el.innerHTML = `
       <div class="row" style="margin-bottom:12px"><label style="margin:0">牌組</label><select id="deck" style="flex:1"><option value="0">全部</option>${index.decks.filter((d) => d.id !== 1).map((d) => `<option value="${d.id}"${d.id === deckId ? " selected" : ""}>${"　".repeat(d.name.split("::").length - 1)}${esc(shortName(d))}</option>`).join("")}</select></div>
       ${!deckId && loadGoals().length ? `<h2 style="margin-top:0">目標進度</h2>${loadGoals().map(goalHtml).join("")}` : ""}
+      ${deckProgressHtml(root)}
       <h2>今天</h2>
       <div class="statgrid">${stat(todays.length, "複習次數")}${stat(`${minutes.toFixed(1)} 分`, "花費時間")}${stat(todays.length ? `${(((todays.length - again) / todays.length) * 100).toFixed(0)}%` : "—", "答對率（沒按重來）")}${stat(`${streak} 天`, "連續天數")}</div>
       <h2>近 30 天複習數</h2>${bars(hist30, { todayIndex: 29, labels: days30.map(dayToDate) })}
@@ -126,6 +230,7 @@ export function mount(el) {
       <h2>保留率（近 30 天）</h2>
       <div class="statgrid">${stat(retention === null ? "—" : `${retention.toFixed(1)}%`, `複習卡沒按「重來」的比例（${month.length} 次）`)}${stat(logs.length, "累計複習次數")}</div>
       <h2>複習日曆</h2><div class="heat">${heat}</div>`;
+    mountDeckTable($("#dp", el), root);
     $("#deck", el).onchange = (e) => {
       deckId = Number(e.target.value);
       localStorage.setItem("stats-deck", deckId);

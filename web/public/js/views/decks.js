@@ -46,6 +46,13 @@ async function deleteDeck(deck) {
   toast(`已刪除 ${cards.length} 張卡片`);
 }
 
+// 進度條 + 「已學 / 總數 · 剩幾張新卡」；沒有卡片的牌組（例如只是容器）不顯示
+function progressLine(r) {
+  if (!r.total) return "";
+  const pct = Math.round((r.seen / r.total) * 100);
+  return `<span class="prog"><span class="bar"><i style="width:${(r.seen / r.total) * 100}%"></i></span><span class="txt">${r.seen} / ${r.total} · ${pct}%${r.left ? ` · 剩 ${r.left}` : " · 全部學過"}</span></span>`;
+}
+
 function render(el) {
   const rows = deckCounts().filter((r) => r.total > 0 || r.deck.id !== 1);
   const z = (n, cls) => `<span class="${n ? cls : "z"}">${n}</span>`;
@@ -56,7 +63,7 @@ function render(el) {
   el.innerHTML =
     today +
     (rows.length
-      ? rows.map((r) => `<div class="deck-row${r.depth ? " child" : ""}"><button class="deck" data-id="${r.deck.id}"><span class="name">${esc(shortName(r.deck))}</span>
+      ? rows.map((r) => `<div class="deck-row${r.depth ? " child" : ""}"><button class="deck" data-id="${r.deck.id}"><span class="info"><span class="name">${esc(shortName(r.deck))}</span>${progressLine(r)}</span>
         <span class="counts">${z(r.new, "n")}${z(r.learn, "l")}${z(r.due, "d")}</span></button><button class="gear" data-gear="${r.deck.id}" aria-label="牌組選項">⚙</button></div>`).join("")
       : welcome()) +
     `<div class="links"><button data-act="new-deck">＋ 新增牌組</button><button data-act="library">牌組庫</button><button data-act="quiz">快測</button><button data-act="custom">自訂複習</button></div>`;
