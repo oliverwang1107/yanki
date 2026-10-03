@@ -12,11 +12,41 @@ const dayToDate = (day) => {
   const d = new Date(Date.UTC(1970, 0, 1) + day * 86400000);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
-const bars = (values, { todayIndex = -1, labels } = {}) => {
-  const max = Math.max(1, ...values);
-  return `<div class="bars">${values.map((v, i) => `<div class="${i === todayIndex ? "today" : ""}" style="height:${Math.max(1, (v / max) * 100)}%" title="${esc(labels?.[i] ?? "")}: ${v}"></div>`).join("")}</div>
-    <div class="axis"><span>${esc(labels?.[0] ?? "")}</span><span>${esc(labels?.[values.length - 1] ?? "")}</span></div>`;
+const WEEK = "日一二三四五六";
+const dayToDateW = (day) => {
+  const d = new Date(Date.UTC(1970, 0, 1) + day * 86400000);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}（週${WEEK[d.getUTCDay()]}）`;
 };
+
+// 可互動的長條圖：滑鼠移過去或手指點一下，上方會顯示那一格的數字；點下去會釘住，再點一次取消。
+const charts = new Map();
+const chart = (id, { values, labels, todayIndex = -1, info, summary }) => {
+  charts.set(id, { info, summary, pinned: null });
+  const max = Math.max(1, ...values);
+  return `<div class="ichart" data-chart="${id}"><div class="readout">${summary}</div>
+    <div class="ibars${values.length > 45 ? " dense" : ""}">${values.map((v, i) => `<div class="col${i === todayIndex ? " today" : ""}" data-i="${i}"><i style="height:${Math.max(1, (v / max) * 100)}%"></i></div>`).join("")}</div>
+    <div class="axis"><span>${esc(labels[0] ?? "")}</span><span>${esc(labels[labels.length - 1] ?? "")}</span></div></div>`;
+};
+const showReadout = (box, i) => {
+  const c = charts.get(box.dataset.chart);
+  if (!c) return;
+  box.querySelector(".readout").innerHTML = i === null ? c.summary : c.info(i);
+};
+function chartEvent(e, type) {
+  const box = e.target.closest?.(".ichart");
+  const c = box && charts.get(box.dataset.chart);
+  if (!c) return;
+  const col = e.target.closest(".col");
+  if (type === "over" && col) showReadout(box, Number(col.dataset.i));
+  else if (type === "out" && !box.querySelector(".ibars").contains(e.relatedTarget)) showReadout(box, c.pinned);
+  else if (type === "click" && col) {
+    const i = Number(col.dataset.i);
+    c.pinned = c.pinned === i ? null : i;
+    box.querySelectorAll(".col.sel").forEach((x) => x.classList.remove("sel"));
+    if (c.pinned !== null) col.classList.add("sel");
+    showReadout(box, c.pinned);
+  }
+}
 const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
 
 const GOAL_KEY = "goals";
@@ -171,9 +201,65 @@ function mountDeckTable(box, root) {
   draw();
 }
 
+// 未來到期量：可切 30／60／90 天、每日／累積，點長條看某一天，也能展開成數據表。
+const FC_KEY = "stats-forecast-ui";
+const fcState = (() => {
+  try {
+    const s = JSON.parse(localStorage.getItem(FC_KEY) ?? "null");
+    if (s && typeof s === "object") return { range: [30, 60, 90].includes(s.range) ? s.range : 30, mode: s.mode === "cum" ? "cum" : "day", table: !!s.table };
+  } catch {}
+  return { range: 30, mode: "day", table: false };
+})();
+const saveFc = () => {
+  try {
+    localStorage.setItem(FC_KEY, JSON.stringify(fcState));
+  } catch {}
+};
+
+function drawForecast(box, dueByDay, t) {
+  if (!box) return;
+  const n = fcState.range;
+  const daily = dueByDay.slice(0, n);
+  let acc = 0;
+  const cum = daily.map((v) => (acc += v));
+  const total = cum[n - 1];
+  const peak = daily.reduce((best, v, i) => (v > daily[best] ? i : best), 0);
+  const sum = (days) => dueByDay.slice(0, days).reduce((a, b) => a + b, 0);
+  const seg = (key, opts) => `<div class="seg">${opts.map(([v, label]) => `<button data-fc="${key}:${v}" class="${String(fcState[key]) === String(v) ? "on" : ""}">${label}</button>`).join("")}</div>`;
+  const labels = daily.map((_, i) => dayToDate(t + i));
+  box.innerHTML = `
+    <div class="statgrid">${stat(sum(1), "今天要複習（含已逾期）")}${stat(sum(7), "未來 7 天")}${stat(sum(30), "未來 30 天")}${stat(sum(91), "未來 90 天")}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">${seg("range", [[30, "30 天"], [60, "60 天"], [90, "90 天"]])}${seg("mode", [["day", "每日"], ["cum", "累積"]])}<button class="chip" data-fc="table:" style="margin-left:auto">${fcState.table ? "收起數據表" : "數據表"}</button></div>
+    ${chart("forecast", {
+      values: fcState.mode === "cum" ? cum : daily,
+      labels,
+      todayIndex: 0,
+      summary: `未來 ${n} 天共 <b>${total}</b> 張 · 平均每天 ${(total / n).toFixed(1)} 張 · 最多：${dayToDate(t + peak)} 的 ${daily[peak]} 張 <span class="muted">（點長條看每天）</span>`,
+      info: (i) => `<b>${dayToDateW(t + i)}${i === 0 ? " 今天" : ""}</b> 到期 <b>${daily[i]}</b> 張${i === 0 ? "（含已逾期）" : ""} · 累積 <b>${cum[i]}</b> 張${total ? `（${((cum[i] / total) * 100).toFixed(0)}%）` : ""}`,
+    })}
+    ${
+      fcState.table
+        ? `<div class="dp-scroll"><table class="simple"><thead><tr><th>日期</th><th>到期</th><th>累積</th></tr></thead><tbody>${daily.map((v, i) => `<tr><td>${dayToDateW(t + i)}${i === 0 ? " 今天" : ""}</td><td>${v}</td><td>${cum[i]}</td></tr>`).join("")}</tbody></table></div>`
+        : ""
+    }`;
+}
+
 export function mount(el) {
   setHeader({ title: "統計", actions: [{ label: "目標設定", onClick: editGoals }] });
   let deckId = Number(localStorage.getItem("stats-deck")) || 0;
+  let redrawForecast = () => {};
+  el.onclick = (e) => {
+    const btn = e.target.closest("[data-fc]");
+    if (btn) {
+      const [k, v] = btn.dataset.fc.split(":");
+      if (k === "table") fcState.table = !fcState.table;
+      else fcState[k] = k === "range" ? Number(v) : v;
+      saveFc();
+      redrawForecast();
+    } else chartEvent(e, "click");
+  };
+  el.onpointerover = (e) => e.pointerType === "mouse" && chartEvent(e, "over");
+  el.onpointerout = (e) => e.pointerType === "mouse" && chartEvent(e, "out");
 
   const draw = () => {
     const t = today();
@@ -194,7 +280,12 @@ export function mount(el) {
 
     const days30 = Array.from({ length: 30 }, (_, i) => t - 29 + i);
     const hist30 = days30.map((d) => perDay.get(d) ?? 0);
-    const forecast = Array.from({ length: 30 }, (_, i) => cards.filter((c) => c.queue === 2 && (i === 0 ? c.due_day <= t : c.due_day === t + i)).length);
+    const dueByDay = new Array(91).fill(0); // 第 0 格含已逾期的
+    for (const c of cards) {
+      if (c.queue !== 2) continue;
+      const k = Math.max(0, c.due_day - t);
+      if (k <= 90) dueByDay[k]++;
+    }
     const state = {
       新卡: cards.filter((c) => c.type === 0 && c.queue >= 0).length,
       學習中: cards.filter((c) => (c.type === 1 || c.type === 3) && c.queue >= 0).length,
@@ -204,7 +295,9 @@ export function mount(el) {
       擱置: cards.filter((c) => c.queue === -2 || c.queue === -3).length,
     };
     const buckets = [[1, 3], [4, 7], [8, 14], [15, 30], [31, 60], [61, 90], [91, 1e9]];
+    const bucketLabels = buckets.map(([a, b]) => (b > 1e8 ? `${a}+` : `${a}–${b}`));
     const ivlHist = buckets.map(([a, b]) => cards.filter((c) => c.type === 2 && c.ivl >= a && c.ivl <= b).length);
+    const ivlTotal = ivlHist.reduce((a, b) => a + b, 0);
     const month = logs.filter((r) => r.type === 1 && dayOf(r.id / 1000) > t - 30);
     const retention = month.length ? (month.filter((r) => r.ease > 1).length / month.length) * 100 : null;
     const weeks = 26;
@@ -222,15 +315,28 @@ export function mount(el) {
       ${deckProgressHtml(root)}
       <h2>今天</h2>
       <div class="statgrid">${stat(todays.length, "複習次數")}${stat(`${minutes.toFixed(1)} 分`, "花費時間")}${stat(todays.length ? `${(((todays.length - again) / todays.length) * 100).toFixed(0)}%` : "—", "答對率（沒按重來）")}${stat(`${streak} 天`, "連續天數")}</div>
-      <h2>近 30 天複習數</h2>${bars(hist30, { todayIndex: 29, labels: days30.map(dayToDate) })}
-      <h2>未來 30 天到期</h2>${bars(forecast, { todayIndex: 0, labels: forecast.map((_, i) => dayToDate(t + i)) })}
+      <h2>近 30 天複習數</h2>${chart("hist", {
+        values: hist30,
+        labels: days30.map(dayToDate),
+        todayIndex: 29,
+        summary: `近 30 天共 <b>${hist30.reduce((a, b) => a + b, 0)}</b> 次 · 平均每天 ${(hist30.reduce((a, b) => a + b, 0) / 30).toFixed(1)} 次 <span class="muted">（點長條看每天）</span>`,
+        info: (i) => `<b>${dayToDateW(days30[i])}</b> 複習 <b>${hist30[i]}</b> 次`,
+      })}
+      <h2>未來到期</h2><div id="fc"></div>
       <h2>卡片狀態</h2>
       <table class="simple">${Object.entries(state).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}<tr><td><b>合計</b></td><td><b>${cards.length}</b></td></tr></table>
-      <h2>間隔分布（天）</h2>${bars(ivlHist, { labels: buckets.map(([a, b]) => (b > 1e8 ? `${a}+` : `${a}–${b}`)) })}
+      <h2>間隔分布（天）</h2>${chart("ivl", {
+        values: ivlHist,
+        labels: bucketLabels,
+        summary: `已學卡片共 <b>${ivlTotal}</b> 張 <span class="muted">（點長條看各區間）</span>`,
+        info: (i) => `間隔 <b>${bucketLabels[i]}</b> 天：<b>${ivlHist[i]}</b> 張（${ivlTotal ? ((ivlHist[i] / ivlTotal) * 100).toFixed(0) : 0}%）`,
+      })}
       <h2>保留率（近 30 天）</h2>
       <div class="statgrid">${stat(retention === null ? "—" : `${retention.toFixed(1)}%`, `複習卡沒按「重來」的比例（${month.length} 次）`)}${stat(logs.length, "累計複習次數")}</div>
       <h2>複習日曆</h2><div class="heat">${heat}</div>`;
     mountDeckTable($("#dp", el), root);
+    redrawForecast = () => drawForecast($("#fc", el), dueByDay, t);
+    redrawForecast();
     $("#deck", el).onchange = (e) => {
       deckId = Number(e.target.value);
       localStorage.setItem("stats-deck", deckId);
