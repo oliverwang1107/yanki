@@ -8,7 +8,7 @@
     python tools/sync_from_anki.py --target local     對本機 wrangler dev（http://127.0.0.1:8787）
     python tools/sync_from_anki.py --collection X     用指定的 .anki2 檔（測試用，不複製）
     python tools/sync_from_anki.py --apply-deletes    也把「Anki 裡已刪除、網頁版沒再動過」的筆記刪掉
-    python tools/sync_from_anki.py --media            把 Anki 新增的媒體檔複製到 public/media/（要再 wrangler deploy）
+    python tools/sync_from_anki.py --media            把 Anki 新增的媒體檔複製到 public/media/（要再執行 node tools/upload_media.mjs 上傳到 R2）
 
 合併規則（和網頁版的 push 一樣，以 mod 較新者為準，複習紀錄取聯集）：
   - 複習紀錄 revlog：Anki 有、網頁版沒有的全部補上（id 是毫秒時間戳，重複會被忽略）。
@@ -341,7 +341,7 @@ def main():
         new = [n for n in os.listdir(src) if not n.startswith("_") and os.path.isfile(os.path.join(src, n)) and not os.path.exists(os.path.join(dst, n))]
         for n in new:
             shutil.copy(os.path.join(src, n), os.path.join(dst, n))
-        print(f"  媒體：新增 {len(new)} 個檔案到 public/media/" + ("（請再執行 npx wrangler deploy）" if new else ""))
+        print(f"  媒體：新增 {len(new)} 個檔案到 public/media/" + ("（請再執行 node tools/upload_media.mjs 上傳到 R2）" if new else ""))
 
     report = os.path.join(ROOT, "data", "import_report.json")
     with open(report, "w", encoding="utf-8") as f:

@@ -7,7 +7,8 @@ Cloudflare Worker 只負責提供頁面和存資料。全部在免費方案內�
 瀏覽器 ── sched.wasm（Rust fsrs ＋ Anki 的學習步驟／間隔規則）
    │      IndexedDB：整份收藏 ＋ 待上傳的紀錄（離線也能複習）
    ▼
-Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm、mp3）
+Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm）
+   ├─ R2 `yanki-media`：音檔與圖片（/media/*，支援 Range）
    └─ D1：notes、cards、revlog、牌組設定
 ```
 
@@ -16,6 +17,7 @@ Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm、mp3）
 | 目的 | 指令 |
 |---|---|
 | 從本機 Anki 匯出資料（唯讀副本） | `python tools/export_anki.py --media`（需 `pip install anki`） |
+| 把 `public/media/` 的音檔與圖片上傳到 R2（只傳還沒傳過的；`--local` 傳到本機模擬 R2，`--all` 全部重傳）。**音檔不在 git 裡，也不會隨 `wrangler deploy` 上傳，新增音檔後要跑這個** | `node tools/upload_media.mjs` |
 | 轉成 D1 的匯入檔 | `node tools/make_seed.mjs` |
 | 建表並匯入本機資料庫 | `npx wrangler d1 execute anki-web --local --file=schema.sql`，再 `--file=data/seed.sql`，最後 `node tools/migrate.mjs local` 升到最新版（seed.sql 是舊格式，要先匯入再遷移） |
 | 本機執行 | `npx wrangler dev`（登入碼在 `.dev.vars` 的 `AUTH_TOKEN`） |

@@ -9,29 +9,45 @@ import { json } from "./util.js";
 // 這幾個檔案不含任何祕密，登入頁和「加到主畫面」需要在登入前取得。
 const PUBLIC_FILES = new Set(["/js/pw.js", "/icon.svg", "/manifest.webmanifest"]);
 
-// 靜態資源不一定支援 Range，而 iOS Safari 播放音檔需要 206；音檔都很小，直接在這裡切。
-async function media(request, env) {
-  const plain = new Request(request.url, { headers: new Headers([...request.headers].filter(([k]) => k.toLowerCase() !== "range")) });
-  const res = await env.ASSETS.fetch(plain);
-  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("Range") || "");
-  if (!res.ok || !range || (!range[1] && !range[2])) {
-    const headers = new Headers(res.headers);
-    headers.set("Accept-Ranges", "bytes");
-    return new Response(res.body, { status: res.status, headers });
+// 音檔與圖片放在 R2（MEDIA 綁定），不放在靜態資源裡，這樣 git 上不用存 111MB 的檔案。
+// iOS Safari 播放音檔一定要 Range / 206，R2 本身支援，這裡只負責把標頭轉成 Response。
+const MEDIA_TYPES = { mp3: "audio/mpeg", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+async function media(request, env, path) {
+  let key;
+  try {
+    key = decodeURIComponent(path.slice("/media/".length));
+  } catch {
+    return new Response("bad request", { status: 400 });
   }
-  const buf = await res.arrayBuffer();
-  const start = range[1] ? Number(range[1]) : Math.max(0, buf.byteLength - Number(range[2]));
-  const end = range[1] && range[2] ? Math.min(Number(range[2]), buf.byteLength - 1) : buf.byteLength - 1;
-  if (start > end || start >= buf.byteLength) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${buf.byteLength}` } });
-  return new Response(buf.slice(start, end + 1), {
-    status: 206,
-    headers: {
-      "Content-Type": res.headers.get("Content-Type") || "audio/mpeg",
-      "Content-Range": `bytes ${start}-${end}/${buf.byteLength}`,
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "private, max-age=86400",
-    },
-  });
+  if (!key || (request.method !== "GET" && request.method !== "HEAD")) return new Response("not found", { status: 404 });
+  const ranged = request.headers.has("Range");
+  let obj;
+  try {
+    obj = await env.MEDIA.get(key, ranged ? { range: request.headers } : {});
+  } catch {
+    return new Response(null, { status: 416 }); // 範圍標頭格式錯誤或超出檔案大小
+  }
+  if (!obj) return new Response("not found", { status: 404 });
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  if (!headers.get("Content-Type")) headers.set("Content-Type", MEDIA_TYPES[key.split(".").pop().toLowerCase()] ?? "application/octet-stream");
+  headers.set("ETag", obj.httpEtag);
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Cache-Control", "private, max-age=86400");
+  let status = 200;
+  let length = obj.size;
+  const start = /^bytes=(\d+)-/.exec(request.headers.get("Range") ?? "")?.[1];
+  if (start !== undefined && Number(start) >= obj.size) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${obj.size}` } });
+  if (ranged && obj.range) {
+    const r = obj.range;
+    const offset = "suffix" in r ? Math.max(0, obj.size - r.suffix) : r.offset ?? 0;
+    if (offset >= obj.size) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${obj.size}` } });
+    length = Math.min("suffix" in r ? r.suffix : r.length ?? obj.size - offset, obj.size - offset);
+    headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${obj.size}`);
+    status = 206;
+  }
+  headers.set("Content-Length", String(length));
+  return new Response(request.method === "HEAD" ? null : obj.body, { status, headers });
 }
 
 // 資料庫暫時不能用（例如免費方案的每日寫入額度用完）時，回一個前端看得懂的 503，並讓重試有依據。
@@ -98,6 +114,6 @@ async function handle(request, env) {
       return json({ error: "not found" }, 404);
     }
 
-    if (path.startsWith("/media/")) return media(request, env);
+    if (path.startsWith("/media/")) return media(request, env, path);
     return env.ASSETS.fetch(request);
 }
