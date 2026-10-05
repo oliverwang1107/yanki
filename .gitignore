@@ -22,6 +22,7 @@ web/vendor/
 # 幾千個音檔（111MB，來自你的牌組），用 tools/export_anki.py --media 從 Anki 複製
 web/public/media/
 web/wasm/target/
+web/fsrs_opt/target/
 # 用你的收藏產生的對照答案，用 tools/make_oracle.py 重建
 web/wasm/tests/oracle.json
 
