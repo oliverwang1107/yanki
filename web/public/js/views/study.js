@@ -104,6 +104,13 @@ function ttsRow(card, side, sounds) {
   return buttons.length ? `<div class="tts-row">${buttons.join("")}</div>` : "";
 }
 
+// 搭配詞沒有中文，背面就寫來源單字和它的釋義，翻面時才知道這個搭配是在哪個字底下看到的。
+function collocationBack(card) {
+  const note = store.notes.get(card.nid);
+  const meaning = stripHtml(note.fields[1] ?? "").slice(0, 40);
+  return `搭配詞，來自 ${sayParts(card).word}${meaning ? `（${meaning}）` : ""}`;
+}
+
 function draw(side) {
   S.ink?.destroy(); // 換面、換卡之前先把還沒存的筆跡存起來
   S.ink = null;
@@ -326,7 +333,7 @@ export async function mount(el, params, hooks = {}) {
     const ph = e.target.closest(".ph-add");
     if (ph && S?.current) {
       ph.disabled = true;
-      ops.addPhraseCard(ph.dataset.en, ph.dataset.zh, sayParts(S.current).word)
+      ops.addPhraseCard(ph.dataset.en, ph.dataset.zh || collocationBack(S.current), sayParts(S.current).word)
         .then((r) => { ph.textContent = "✓"; toast(r.added ? `已加入「${ops.PHRASE_DECK}」牌組` : "這個片語已經在牌組裡了"); })
         .catch((err) => { ph.disabled = false; toast(err.message); });
     } else if (say && S?.current) {

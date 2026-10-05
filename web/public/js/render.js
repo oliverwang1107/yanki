@@ -57,7 +57,7 @@ export function renderDict(entry) {
   if (entry.ant?.length) add("反義", list(entry.ant));
   add("釋義", entry.en ? esc(entry.en) : "");
   if (entry.ph?.length) add("片語", entry.ph.map(([en, zh]) => `${esc(en)} <i>${esc(zh)}</i> <button type="button" class="ph-add" data-en="${esc(en)}" data-zh="${esc(zh)}" aria-label="把「${esc(en)}」加入片語牌組" title="加入片語牌組一起背">＋</button>`).join("<br>"));
-  if (entry.col?.length) add("搭配", list(entry.col));
+  if (entry.col?.length) add("搭配", entry.col.map((c) => `${esc(c)} <button type="button" class="ph-add" data-en="${esc(c)}" data-zh="" aria-label="把「${esc(c)}」加入片語牌組" title="加入片語牌組一起背">＋</button>`).join(" · "));
   if (entry.rel?.length) add("相關", entry.rel.map(([w, pos, zh]) => `${esc(w)} <i>${esc(pos)} ${esc(zh)}</i>`).join(" · "));
   if (entry.ex) add("例句", `${esc(entry.ex[0])}<br><i>${esc(entry.ex[1] ?? "")}</i>`);
   return rows.length ? `<div class="dict">${rows.join("")}</div>` : "";
