@@ -1,10 +1,11 @@
 // 「更多」：自訂複習、頑固卡與暫停的卡的捷徑、備份、登出等。
+import { backupJson, applyRestore, parseBackup, planRestore, planTotal } from "../backup.js";
 import { index, store } from "../core.js";
 import * as db from "../db.js";
 import { getPrefs, setPref } from "../prefs.js";
 import { derive } from "../pw.js";
 import { speak, ttsAvailable } from "../tts.js";
-import { confirmBox, esc, openDialog, setHeader, toast } from "../ui.js";
+import { confirmBox, esc, fmtDate, openDialog, setHeader, toast } from "../ui.js";
 
 function download(name, text, type = "application/json") {
   const a = document.createElement("a");
@@ -14,16 +15,73 @@ function download(name, text, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-export function backupJson() {
-  return JSON.stringify({
-    version: 1,
-    exportedAt: Date.now(),
-    static: store.static,
-    notes: [...store.notes.values()],
-    cards: [...store.cards.values()],
-    revlog: [...store.revlog.values()],
-    dict: [...store.dict.values()],
-  });
+const LAST_BACKUP = "anki-last-backup";
+const lastBackupAt = () => { try { return Number(localStorage.getItem(LAST_BACKUP)) || 0; } catch { return 0; } };
+const stampBackup = () => { try { localStorage.setItem(LAST_BACKUP, String(Date.now())); } catch { /* 無痕模式 */ } };
+const backupAgeText = () => {
+  const t = lastBackupAt();
+  if (!t) return "這台裝置還沒有下載過備份";
+  const days = Math.floor((Date.now() - t) / 86400000);
+  return days < 1 ? "上次備份：今天" : `上次備份：${days} 天前（${fmtDate(t)}）`;
+};
+
+function downloadBackup() {
+  const d = new Date();
+  download(`anki-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}.json`, backupJson());
+  stampBackup();
+}
+
+// 還原：選檔 → 顯示兩種方式各會改動多少 → 確認 → 寫入（之後同步上傳）
+function restoreFlow(sync) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    let backup;
+    try {
+      backup = parseBackup(await file.text());
+    } catch (err) {
+      return toast(err.message, 5000);
+    }
+    const plans = { merge: planRestore(backup, "merge"), replace: planRestore(backup, "replace") };
+    const line = (p) => `新增或更新 ${p.notes.length} 筆筆記、${p.cards.length} 張卡片、${p.revlog.length} 筆複習紀錄${p.ink.length ? `、${p.ink.length} 張手寫標記` : ""}${p.static ? "、牌組與設定" : ""}${p.dropCards.length ? `；刪除 ${p.dropNotes.length} 筆筆記與 ${p.dropCards.length} 張卡片` : ""}`;
+    const when = backup.exportedAt ? fmtDate(backup.exportedAt) : "（未知日期）";
+    const dlg = openDialog(`<h3>還原備份</h3>
+      <p class="small muted">備份日期 ${when} · ${backup.notes.length} 筆筆記 · ${backup.cards.length} 張卡片 · ${backup.revlog.length} 筆複習紀錄</p>
+      <label class="check" style="align-items:flex-start"><input type="radio" name="rm" value="merge" checked><span><b>合併（建議）</b><br><span class="small muted">只補上目前缺少的、或備份裡比較新的資料，不會刪除任何東西。<br>${line(plans.merge)}</span></span></label>
+      <label class="check" style="align-items:flex-start"><input type="radio" name="rm" value="replace"><span><b>完整還原</b><br><span class="small muted">讓帳號和備份一模一樣；備份之後新增的筆記和卡片會被刪除（複習紀錄只會補回、不會刪除）。還原前會先自動下載一份目前的備份。<br>${line(plans.replace)}</span></span></label>
+      ${plans.merge.warnings.length ? `<p class="hint">有 ${plans.merge.warnings.length} 項資料因為缺少關聯而略過。</p>` : ""}
+      <p class="error" id="rerr" hidden></p>
+      <div class="dialog-actions"><button data-close>取消</button><button class="primary-btn" id="rgo">開始還原</button></div>`);
+    const $ = (s) => dlg.el.querySelector(s);
+    dlg.el.onclick = (e) => { if (e.target === dlg.el || e.target.closest("[data-close]")) dlg.close(); };
+    $("#rgo").onclick = async () => {
+      const mode = dlg.el.querySelector("input[name=rm]:checked").value;
+      const plan = plans[mode];
+      if (!planTotal(plan) && !plan.static) { dlg.close(); return toast("目前的資料已經和備份一致，不需要還原"); }
+      if (mode === "replace" && !(await confirmBox(`完整還原會刪除 ${plan.dropCards.length} 張卡片、${plan.dropNotes.length} 筆筆記（備份之後新增的）。繼續嗎？`, { ok: "完整還原", danger: true }))) return;
+      if (mode === "replace") downloadBackup(); // 保險：先留一份還原前的備份
+      const body = dlg.el.querySelector(".dialog-body");
+      body.innerHTML = `<h3>還原中…</h3><p id="pl" class="small muted">準備中</p><progress id="pp" max="1" value="0" style="width:100%"></progress>`;
+      try {
+        await applyRestore(plan, (frac, label) => {
+          const pl = dlg.el.querySelector("#pl"), pp = dlg.el.querySelector("#pp");
+          if (pl) pl.textContent = label;
+          if (pp) pp.value = frac;
+        });
+        dlg.close();
+        toast("還原完成，正在同步到伺服器…", 4000);
+        sync?.();
+        location.hash = "#/";
+      } catch (err) {
+        dlg.close();
+        toast(`還原中斷：${err.message}`, 6000);
+      }
+    };
+  };
+  input.click();
 }
 
 async function logout(clearLocal) {
@@ -93,8 +151,8 @@ export async function mount(el, arg, { sync }) {
     </div>
     <h2>資料</h2>
     <div class="card-box"><div class="muted small">${stats.notes} 張筆記 · ${stats.cards} 張卡片 · ${stats.decks} 個牌組</div>
-      <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn" id="resync">重新同步</button><button class="btn" id="backup">下載備份 (JSON)</button></div>
-      <p class="hint">備份包含所有筆記、卡片、複習紀錄和牌組設定。建議每週下載一次。</p></div>
+      <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn" id="resync">重新同步</button><button class="btn" id="backup">下載備份 (JSON)</button><button class="btn" id="restore">還原備份…</button></div>
+      <p class="hint"><span id="backup-age">${backupAgeText()}</span>。備份包含所有筆記、卡片、複習紀錄、手寫標記和牌組設定，建議每週下載一次。還原時可以選「合併」（只補缺少的）或「完整還原」。</p></div>
     <h2>帳號</h2>
     <div class="card-box"><div><b>${esc(me?.username ?? "（尚未設定帳號）")}</b>${me?.is_admin ? ` <span class="pill">管理員</span>` : ""}</div>
       <div class="row" style="margin-top:10px;flex-wrap:wrap">${me?.username ? `<button class="btn" id="chpw">變更密碼</button>` : ""}<button class="btn" id="logout">登出</button><button class="btn danger-text" id="logout-clear">登出並清除本機資料</button></div>
@@ -108,10 +166,11 @@ export async function mount(el, arg, { sync }) {
   el.querySelector("#p-test")?.addEventListener("click", () => speak("Practice makes perfect."));
   el.querySelector("#resync").onclick = () => sync();
   el.querySelector("#backup").onclick = () => {
-    const d = new Date();
-    download(`anki-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}.json`, backupJson());
+    downloadBackup();
+    el.querySelector("#backup-age").textContent = backupAgeText();
     toast("已下載備份");
   };
+  el.querySelector("#restore").onclick = () => restoreFlow(sync);
   el.querySelector("#logout").onclick = () => logout(false);
   el.querySelector("#logout-clear").onclick = () => logout(true);
   el.querySelector("#chpw")?.addEventListener("click", changePasswordDialog);

@@ -28,11 +28,19 @@ export async function pushChanges() {
   const by = { c: [], n: [], r: [], i: [] };
   const maps = { c: store.cards, n: store.notes, r: store.revlog, i: store.ink };
   const done = [];
+  const missing = { c: [], n: [], r: [], i: [] };
   for (const key of keys) {
     const [prefix, id] = [key[0], Number(key.slice(2))];
     const row = maps[prefix].get(id);
     if (row) by[prefix].push(row);
-    done.push(key); // 資料列已被刪除的也一併清掉
+    else if (prefix !== "r") missing[prefix].push(id); // 已刪除的筆記／卡片不在記憶體裡，但刪除標記要上傳
+    done.push(key);
+  }
+  // 從本機資料庫補讀被刪除的資料列（deleted = 1），伺服器和其他裝置才會知道它們被刪了
+  for (const [prefix, name] of [["n", "notes"], ["c", "cards"], ["i", "ink"]]) {
+    if (!missing[prefix].length) continue;
+    const rows = await db.getRows(name, missing[prefix]);
+    for (const row of rows) if (row?.deleted) by[prefix].push(row);
   }
   const batches = [];
   for (const [name, prefix] of [["notes", "n"], ["cards", "c"], ["revlog", "r"], ["ink", "i"]]) {

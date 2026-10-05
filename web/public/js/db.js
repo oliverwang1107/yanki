@@ -52,6 +52,8 @@ async function tx(stores, mode, fn) {
 export const getAll = (store) => tx([store], "readonly", (s) => wrap(s.getAll()));
 export const kvGet = (key) => tx(["kv"], "readonly", (s) => wrap(s.get(key)));
 export const kvSet = (key, value) => tx(["kv"], "readwrite", (s) => wrap(s.put(value, key)));
+// 依 id 讀幾列（已刪除的資料列不在記憶體裡，上傳「刪除」時要從這裡讀）
+export const getRows = (store, ids) => tx([store], "readonly", (s) => Promise.all(ids.map((id) => wrap(s.get(id)))));
 export const outboxKeys = () => tx(["outbox"], "readonly", (s) => wrap(s.getAllKeys()));
 
 export function putMany(store, rows) {
