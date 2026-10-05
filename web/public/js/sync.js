@@ -25,8 +25,8 @@ const chunks = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (
 export async function pushChanges() {
   const keys = await db.outboxKeys();
   if (!keys.length) return 0;
-  const by = { c: [], n: [], r: [] };
-  const maps = { c: store.cards, n: store.notes, r: store.revlog };
+  const by = { c: [], n: [], r: [], i: [] };
+  const maps = { c: store.cards, n: store.notes, r: store.revlog, i: store.ink };
   const done = [];
   for (const key of keys) {
     const [prefix, id] = [key[0], Number(key.slice(2))];
@@ -35,7 +35,7 @@ export async function pushChanges() {
     done.push(key); // 資料列已被刪除的也一併清掉
   }
   const batches = [];
-  for (const [name, prefix] of [["notes", "n"], ["cards", "c"], ["revlog", "r"]]) {
+  for (const [name, prefix] of [["notes", "n"], ["cards", "c"], ["revlog", "r"], ["ink", "i"]]) {
     for (const part of chunks(by[prefix], PUSH_BATCH)) batches.push({ [name]: part });
   }
   for (const body of batches) {
@@ -57,7 +57,7 @@ export async function pullChanges(onProgress = () => {}) {
   indexStatic();
 
   const dirty = new Set(await db.outboxKeys());
-  for (const table of ["notes", "cards", "revlog", "dict"]) {
+  for (const table of ["notes", "cards", "revlog", "dict", "ink"]) {
     const map = store[table];
     let cursor = (await db.kvGet(`cursor:${table}`)) ?? { mod: 0, id: 0 };
     for (;;) {

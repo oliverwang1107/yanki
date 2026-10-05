@@ -2,18 +2,20 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 import * as core from "../public/js/core.js";
+import * as ink from "../public/js/ink.js";
 import * as ops from "../public/js/ops.js";
 import { plan } from "../public/js/plan.js";
 import { SearchError, search } from "../public/js/search.js";
 
 const { store, index, persist } = core;
-const saved = { cards: 0, notes: 0 };
+const saved = { cards: 0, notes: 0, ink: 0 };
 Object.assign(persist, {
   cards: async (rows) => void (saved.cards += rows.length),
   notes: async (rows) => void (saved.notes += rows.length),
   revlog: async () => {},
   removeRevlog: async () => {},
   static: async () => {},
+  ink: async (rows) => void (saved.ink += rows.length),
 });
 
 const NT_BASIC = 1;
@@ -333,5 +335,46 @@ describe("plan（每日上限）", () => {
     const orders = new Set();
     for (let k = 0; k < 8; k++) orders.add(plan(12).new.map((c) => c.pos).join());
     assert.ok(orders.size > 1, "隨機順序每次不同");
+  });
+});
+
+describe("手寫標記（Apple Pencil）", () => {
+  beforeEach(() => { store.ink.clear(); saved.ink = 0; });
+
+  test("抽稀：保留頭尾、丟掉太近的點", () => {
+    const pts = [0, 0, 1, 1, 2, 2, 10, 10, 11, 11, 30, 30];
+    assert.deepEqual(ink.simplify(pts, 3), [0, 0, 10, 10, 30, 30]);
+    assert.deepEqual(ink.simplify([5, 5], 3), [5, 5]);
+    assert.deepEqual(ink.simplify([5, 5, 6, 6], 3), [5, 5, 6, 6]);
+  });
+
+  test("存檔、讀回、清空仍保留一列（才能同步出去）", async () => {
+    assert.deepEqual(ink.strokesOf(7), []);
+    await ink.saveStrokes(7, [{ k: "h", p: [10, 10, 200, 12] }, { k: "r", p: [50, 50, 60, 60] }]);
+    assert.equal(saved.ink, 1);
+    const row = store.ink.get(7);
+    assert.ok(row.mod > 0 && row.deleted === 0);
+    assert.equal(ink.strokesOf(7).length, 2);
+    await ink.saveStrokes(7, ink.strokesOf(7)); // 內容沒變就不重複寫
+    assert.equal(saved.ink, 1);
+    await ink.saveStrokes(7, []);
+    assert.equal(saved.ink, 2);
+    assert.deepEqual(ink.strokesOf(7), []);
+    assert.ok(store.ink.has(7));
+  });
+
+  test("壞資料與未知筆種會被忽略；太大的筆跡會被擋下", async () => {
+    store.ink.set(8, { id: 8, mod: 1, data: "not json", deleted: 0 });
+    assert.deepEqual(ink.strokesOf(8), []);
+    store.ink.set(9, { id: 9, mod: 1, data: JSON.stringify({ s: [{ k: "zzz", p: [1, 2] }, { k: "b", p: [1, 2, 3, 4] }] }), deleted: 0 });
+    assert.equal(ink.strokesOf(9).length, 1);
+    const huge = [{ k: "h", p: Array.from({ length: 20000 }, (_, i) => i % 1000) }];
+    await assert.rejects(() => ink.saveStrokes(10, huge), /筆跡太多/);
+  });
+
+  test("橡皮擦命中判斷", () => {
+    const stroke = { k: "r", p: [100, 100, 200, 100] };
+    assert.equal(ink.hits(stroke, 105, 104, 14), true);
+    assert.equal(ink.hits(stroke, 150, 100, 14), false);
   });
 });

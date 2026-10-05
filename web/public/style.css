@@ -95,3 +95,13 @@ footer .primary { width: 100%; padding: 14px; min-height: 52px; border: 0; borde
   padding: 8px 16px; border-radius: 999px; font-size: 14px; backdrop-filter: blur(6px);
 }
 [hidden] { display: none !important; }
+
+/* 手寫標記（Apple Pencil） */
+.card-body { position: relative; }
+.ink-canvas { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; z-index: 2; }
+.ink-canvas.on { pointer-events: auto; touch-action: pan-y; cursor: crosshair; }
+.ink-bar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+.ink-bar button { min-height: 44px; min-width: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 22px; background: var(--card-bg); color: var(--fg); font-size: 15px; cursor: pointer; }
+.ink-bar button.sel { background: var(--primary); border-color: var(--primary); color: #fff; }
+.ink-bar button:disabled { opacity: .4; cursor: default; }
+.inking .card-body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

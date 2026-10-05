@@ -4,6 +4,7 @@ import { json, now } from "./util.js";
 
 const PAGE = 1000;
 const MAX_BATCH = 500;
+const MAX_INK = 60000; // 一張卡的手寫標記上限（字元數）
 
 export async function staticData(env, uid) {
   const [meta, notetypes, decks, configs, user] = await env.DB.batch([
@@ -22,6 +23,7 @@ const PULL = {
   notes: "SELECT id, guid, mid, mod, tags, fields, deleted FROM notes WHERE uid = ?3 AND (mod > ?1 OR (mod = ?1 AND id > ?2)) ORDER BY mod, id LIMIT ?4",
   cards: "SELECT id, nid, did, ord, type, queue, ivl, reps, lapses, left, mod, s, d, lrt, pos, due_ts, due_day, flags, bury_day, deleted FROM cards WHERE uid = ?3 AND (mod > ?1 OR (mod = ?1 AND id > ?2)) ORDER BY mod, id LIMIT ?4",
   // 字典是大家共用的，但只送給「自己有這張筆記」的人
+  ink: "SELECT id, mod, data, deleted FROM ink WHERE uid = ?3 AND (mod > ?1 OR (mod = ?1 AND id > ?2)) ORDER BY mod, id LIMIT ?4",
   dict: "SELECT id, mod, data FROM dict WHERE (mod > ?1 OR (mod = ?1 AND id > ?2)) AND id IN (SELECT id FROM notes WHERE uid = ?3) ORDER BY mod, id LIMIT ?4",
 };
 
@@ -57,6 +59,11 @@ const UPSERT = {
     FROM json_each(?1) WHERE true
     ON CONFLICT(uid, id) DO UPDATE SET mid = excluded.mid, mod = excluded.mod, tags = excluded.tags, fields = excluded.fields, deleted = excluded.deleted
     WHERE excluded.mod > notes.mod`,
+  ink: `INSERT INTO ink (uid, id, mod, data, deleted)
+    SELECT ?2, ${["id", "mod", "data", "deleted"].map(J).join(", ")}
+    FROM json_each(?1) WHERE true
+    ON CONFLICT(uid, id) DO UPDATE SET mod = excluded.mod, data = excluded.data, deleted = excluded.deleted
+    WHERE excluded.mod > ink.mod`,
   revlog: `INSERT OR IGNORE INTO revlog (uid, id, cid, ease, ivl, last_ivl, time, type)
     SELECT ?2, ${["id", "cid", "ease", "ivl", "last_ivl", "time", "type"].map(J).join(", ")} FROM json_each(?1)`,
 };
@@ -67,6 +74,7 @@ export async function push(request, env, uid) {
   for (const table of Object.keys(UPSERT)) {
     const rows = body[table] ?? [];
     if (!Array.isArray(rows) || rows.length > MAX_BATCH) return json({ error: `${table}: 一次最多 ${MAX_BATCH} 筆` }, 400);
+    if (table === "ink" && rows.some((r) => typeof r?.data !== "string" || r.data.length > MAX_INK)) return json({ error: "ink: 筆跡資料太大" }, 400);
     if (rows.length) stmts.push(env.DB.prepare(UPSERT[table]).bind(JSON.stringify(rows), uid));
   }
   if (stmts.length) await env.DB.batch(stmts);

@@ -138,8 +138,8 @@ async function init() {
   db.useUser(me.id);
   await initEngine();
 
-  const [notes, cards, revlog, dict, st] = await Promise.all([db.getAll("notes"), db.getAll("cards"), db.getAll("revlog"), db.getAll("dict"), db.kvGet("static")]);
-  loadAll({ notes, cards, revlog, dict, static: st });
+  const [notes, cards, revlog, dict, ink, st] = await Promise.all([db.getAll("notes"), db.getAll("cards"), db.getAll("revlog"), db.getAll("dict"), db.getAll("ink"), db.kvGet("static")]);
+  loadAll({ notes, cards, revlog, dict, ink, static: st });
   await unburyIfNeeded();
   updateSyncChip();
   await route();

@@ -10,6 +10,7 @@ import { englishOf, speak, stopSpeaking, ttsAvailable } from "../tts.js";
 import { $, actionSheet, confirmBox, esc, fmtDays, promptBox, setHeader, toast } from "../ui.js";
 import { openNoteDialog } from "./editor.js";
 import { openCardInfo } from "./info.js";
+import { mountInk } from "./ink_layer.js";
 
 const LEARN_AHEAD = 1200; // 沒有別的卡時，提前 20 分鐘內的學習卡也拿出來
 const KIND_TYPE = { learning: 1, review: 2, relearning: 3 };
@@ -104,6 +105,8 @@ function ttsRow(card, side, sounds) {
 }
 
 function draw(side) {
+  S.ink?.destroy(); // 換面、換卡之前先把還沒存的筆跡存起來
+  S.ink = null;
   const card = S.current;
   const note = store.notes.get(card.nid);
   const nt = index.noteTypeById.get(note.mid);
@@ -113,6 +116,7 @@ function draw(side) {
   const flag = card.flags ? `<div class="cardflag" data-f="${card.flags}"></div>` : "";
   const marked = ops.tagList(note).includes("marked") ? `<span class="pill warn" style="align-self:center;margin-bottom:6px">★ 已標記</span>` : "";
   $("#card").innerHTML = `${flag}<div class="card-body">${marked}${r.html}${dict}</div>${ttsRow(card, side, r.sounds)}${metaLine(card)}`;
+  if (side === "a") S.ink = mountInk($("#card"), card);
   return r;
 }
 
@@ -202,6 +206,8 @@ async function undo() {
 }
 
 function finish(learning) {
+  S.ink?.destroy();
+  S.ink = null;
   S.current = null;
   $("#card").hidden = true;
   $("#show").hidden = true;
@@ -337,6 +343,7 @@ export async function mount(el, params, hooks = {}) {
     clearTimeout(finish.t);
     audio?.pause();
     stopSpeaking();
+    S?.ink?.destroy();
     S?.onLeave?.(S.answered);
     S = null;
   };

@@ -9,6 +9,7 @@ export const store = {
   cards: new Map(),
   revlog: new Map(),
   dict: new Map(),
+  ink: new Map(), // 手寫標記：id = 卡片 id，{ id, mod, data, deleted }
   static: { meta: {}, notetypes: [], decks: [], configs: [] },
 };
 
@@ -75,6 +76,7 @@ export const persist = {
   cards: (rows) => db.putTracked("cards", "c", rows),
   notes: (rows) => db.putTracked("notes", "n", rows),
   revlog: (rows) => db.putTracked("revlog", "r", rows),
+  ink: (rows) => db.putTracked("ink", "i", rows),
   removeRevlog: (ids) => db.deleteTracked("revlog", "r", ids),
   static: (value) => db.kvSet("static", value),
 };
@@ -99,6 +101,12 @@ export async function saveNotes(rows) {
   });
   await persist.notes(rows);
   emit("notes");
+}
+
+export async function saveInk(row) {
+  bump(row);
+  store.ink.set(row.id, row);
+  await persist.ink([row]);
 }
 
 export async function addRevlog(row) {
@@ -134,8 +142,8 @@ export async function saveStatic(patch) {
 }
 
 // 一次載入／取代整份收藏（啟動、同步之後用）
-export function loadAll({ notes, cards, revlog, dict, static: st }) {
-  for (const [map, rows] of [[store.notes, notes], [store.cards, cards], [store.revlog, revlog], [store.dict, dict]]) {
+export function loadAll({ notes, cards, revlog, dict, ink, static: st }) {
+  for (const [map, rows] of [[store.notes, notes], [store.cards, cards], [store.revlog, revlog], [store.dict, dict], [store.ink, ink]]) {
     map.clear();
     for (const r of rows ?? []) if (!r.deleted) map.set(r.id, r);
   }

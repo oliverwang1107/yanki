@@ -1,5 +1,5 @@
 // 本機資料庫（IndexedDB）。整份收藏只有幾 MB，啟動時整個讀進記憶體，之後只寫有變動的列。
-const STORES = ["kv", "notes", "cards", "revlog", "outbox", "dict"];
+const STORES = ["kv", "notes", "cards", "revlog", "outbox", "dict", "ink"];
 
 let dbPromise;
 let dbName = "anki-web";
@@ -22,7 +22,7 @@ export function deleteLocalData() {
 
 function open() {
   dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(dbName, 2);
+    const req = indexedDB.open(dbName, 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       for (const name of STORES) {

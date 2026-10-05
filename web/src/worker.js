@@ -99,7 +99,7 @@ async function handle(request, env) {
       if (path === "/api/auth/password" && post) return changePassword(request, env, auth);
       if (path === "/api/static") return post ? saveStatic(request, env, uid) : staticData(env, uid);
       if (path === "/api/push" && post) return push(request, env, uid);
-      const m = path.match(/^\/api\/pull\/(notes|cards|revlog|dict)$/);
+      const m = path.match(/^\/api\/pull\/(notes|cards|revlog|dict|ink)$/);
       if (m) return pull(m[1], url, env, uid);
       if (path === "/api/library") return listLibrary(env, uid);
       if (path === "/api/library/join" && post) return joinLibrary(request, env, uid);
