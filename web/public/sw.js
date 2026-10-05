@@ -1,10 +1,10 @@
 // 讓網頁離線也能開：程式檔用「先網路、失敗用快取」，音檔用「先快取」。
 // iOS Safari 播音檔會送 Range 請求，快取的完整檔案要自己切成 206 回應，否則無法播放。
-const APP = "app-v10";
+const APP = "app-v11";
 const MEDIA = "media-v1";
 const SHELL = [
   "/", "/style.css", "/ui.css", "/sched.wasm", "/manifest.webmanifest", "/icon.svg",
-  ...["app", "backup", "core", "db", "engine", "ink", "ops", "plan", "prefs", "progress", "pw", "quizgen", "render", "sched", "search", "sync", "tts", "ui"].map((n) => `/js/${n}.js`),
+  ...["app", "backup", "core", "db", "engine", "ink", "media", "ops", "plan", "prefs", "progress", "pw", "quizgen", "render", "sched", "search", "sync", "tts", "ui"].map((n) => `/js/${n}.js`),
   ...["admin", "browse", "custom", "decks", "editor", "ink_layer", "info", "more", "options", "quiz", "stats", "study"].map((n) => `/js/views/${n}.js`),
 ];
 

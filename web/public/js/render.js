@@ -15,6 +15,16 @@ export function sanitize(html) {
   return doc.body.innerHTML;
 }
 
+// 匯入的卡片常用「<img src="檔名.jpg">」這種相對路徑；統一改成 /media/檔名（已經是網址或 data: 的不動）。
+export function fixMediaSrc(html) {
+  return html.replace(/(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)\2/gi, (all, head, q, src) => {
+    if (!src || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(src)) return all;
+    let name = src;
+    try { name = decodeURIComponent(src); } catch { /* 保持原樣 */ }
+    return `${head}${q}/media/${encodeURIComponent(name)}${q}`;
+  });
+}
+
 function expand(template, fields, frontSide) {
   const section = /\{\{([#^])\s*([^}]+?)\s*\}\}([\s\S]*?)\{\{\/\s*\2\s*\}\}/;
   let out = template;
@@ -36,7 +46,7 @@ export function renderSide(noteType, fieldValues, side) {
     sounds.push(file);
     return `<button type="button" class="snd" data-file="${file.replace(/"/g, "&quot;")}" aria-label="播放">▶</button>`;
   });
-  return { html: sanitize(withButtons), sounds };
+  return { html: sanitize(fixMediaSrc(withButtons)), sounds };
 }
 
 // 沒有 FrontSide 分隔線時，答案面只顯示新增的部分（Anki 的 <hr id=answer>）。

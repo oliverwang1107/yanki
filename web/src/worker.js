@@ -4,6 +4,7 @@ import { COOKIE, authenticate, changePassword, clearCookie, inviteInfo, login, r
 import { createInvite, joinLibrary, listLibrary, listUsers, setDisabled } from "./admin.js";
 import { phraseExample } from "./ai.js";
 import { pull, push, saveStatic, staticData } from "./data.js";
+import { USER_MEDIA_TYPES, ownerOfKey, uploadMedia } from "./media.js";
 import { authPage } from "./pages.js";
 import { json } from "./util.js";
 
@@ -12,8 +13,8 @@ const PUBLIC_FILES = new Set(["/js/pw.js", "/icon.svg", "/manifest.webmanifest"]
 
 // 音檔與圖片放在 R2（MEDIA 綁定），不放在靜態資源裡，這樣 git 上不用存 111MB 的檔案。
 // iOS Safari 播放音檔一定要 Range / 206，R2 本身支援，這裡只負責把標頭轉成 Response。
-const MEDIA_TYPES = { mp3: "audio/mpeg", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
-async function media(request, env, path) {
+const MEDIA_TYPES = { ...USER_MEDIA_TYPES, svg: "image/svg+xml" };
+async function media(request, env, path, uid) {
   let key;
   try {
     key = decodeURIComponent(path.slice("/media/".length));
@@ -21,6 +22,8 @@ async function media(request, env, path) {
     return new Response("bad request", { status: 400 });
   }
   if (!key || (request.method !== "GET" && request.method !== "HEAD")) return new Response("not found", { status: 404 });
+  const owner = ownerOfKey(key);
+  if (owner !== null && owner !== uid) return new Response("not found", { status: 404 }); // 別人的私人檔案
   const ranged = request.headers.has("Range");
   let obj;
   try {
@@ -34,6 +37,7 @@ async function media(request, env, path) {
   if (!headers.get("Content-Type")) headers.set("Content-Type", MEDIA_TYPES[key.split(".").pop().toLowerCase()] ?? "application/octet-stream");
   headers.set("ETag", obj.httpEtag);
   headers.set("Accept-Ranges", "bytes");
+  headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Cache-Control", "private, max-age=86400");
   let status = 200;
   let length = obj.size;
@@ -102,6 +106,7 @@ async function handle(request, env) {
       if (path === "/api/push" && post) return push(request, env, uid);
       const m = path.match(/^\/api\/pull\/(notes|cards|revlog|dict|ink)$/);
       if (m) return pull(m[1], url, env, uid);
+      if (path === "/api/media" && (post || request.method === "PUT")) return uploadMedia(request, env, uid);
       if (path === "/api/phrase-example" && post) return phraseExample(request, env, uid);
       if (path === "/api/library") return listLibrary(env, uid);
       if (path === "/api/library/join" && post) return joinLibrary(request, env, uid);
@@ -116,6 +121,6 @@ async function handle(request, env) {
       return json({ error: "not found" }, 404);
     }
 
-    if (path.startsWith("/media/")) return media(request, env, path);
+    if (path.startsWith("/media/")) return media(request, env, path, uid);
     return env.ASSETS.fetch(request);
 }

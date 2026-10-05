@@ -2,10 +2,54 @@
 import { cardsOfNote, index, shortName, store } from "../core.js";
 import * as ops from "../ops.js";
 import { renderSide } from "../render.js";
+import { startRecording, uploadFile } from "../media.js";
 import { confirmBox, esc, openDialog, setHeader, toast } from "../ui.js";
 
 const noteTypes = () => store.static.notetypes;
 const deckLabel = (d) => d.name.replaceAll("::", " › ");
+
+function insertAtCursor(textarea, text) {
+  const { selectionStart: a, selectionEnd: b, value } = textarea;
+  textarea.value = value.slice(0, a) + text + value.slice(b);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = a + text.length;
+  textarea.dispatchEvent(new Event("input"));
+}
+
+// 把檔案（圖片或音檔）上傳後插進欄位
+async function attach(textarea, file) {
+  toast("上傳中…", 20000);
+  try {
+    insertAtCursor(textarea, await uploadFile(file));
+    toast("已加入");
+  } catch (err) {
+    toast(err.message, 5000);
+  }
+}
+
+function recordDialog(textarea) {
+  const d = openDialog(`<h3>錄音</h3><p id="rec-msg" class="muted">準備麥克風…</p><div class="dialog-actions"><button id="rec-cancel">取消</button><button id="rec-stop" class="primary-btn" disabled>停止並加入</button></div>`);
+  let rec;
+  const msg = (t) => (d.el.querySelector("#rec-msg").textContent = t);
+  d.el.querySelector("#rec-cancel").onclick = () => { rec?.cancel(); d.close(); };
+  startRecording().then((r) => {
+    rec = r;
+    msg("錄音中… 說完請按「停止並加入」");
+    const stop = d.el.querySelector("#rec-stop");
+    stop.disabled = false;
+    stop.onclick = async () => {
+      stop.disabled = true;
+      msg("上傳中…");
+      try {
+        const file = await rec.stop();
+        d.close();
+        await attach(textarea, file);
+      } catch (err) {
+        msg(err.message);
+      }
+    };
+  }).catch((err) => msg(err.name === "NotAllowedError" ? "沒有麥克風權限，請在瀏覽器設定允許" : err.message));
+}
 
 function wrapSelection(textarea, before, after) {
   const { selectionStart: a, selectionEnd: b, value } = textarea;
@@ -25,7 +69,7 @@ function buildForm(root, { mode, note, mid, did, tags = "", onChange }) {
     ${mode === "add" ? `<div class="optgrid"><div><label>筆記類型</label><select id="f-type">${noteTypes().map((t) => `<option value="${t.id}"${t.id === mid ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select></div>
     <div><label>牌組</label><select id="f-deck">${decks.map((d) => `<option value="${d.id}"${d.id === did ? " selected" : ""}>${esc(deckLabel(d))}</option>`).join("")}</select></div></div>` : ""}
     ${nt.fields.map((f, i) => `<div class="fieldbox"><label>${esc(f)}</label>
-      <div class="toolbar"><button type="button" data-wrap="b">B</button><button type="button" data-wrap="i"><i>I</i></button><button type="button" data-wrap="u"><u>U</u></button><button type="button" data-br>換行</button></div>
+      <div class="toolbar"><button type="button" data-wrap="b">B</button><button type="button" data-wrap="i"><i>I</i></button><button type="button" data-wrap="u"><u>U</u></button><button type="button" data-br>換行</button><button type="button" data-file="image" title="加入圖片">🖼</button><button type="button" data-file="audio" title="加入音檔">🔊</button><button type="button" data-rec title="錄音">🎤</button></div>
       <textarea data-field="${i}" rows="${i === 0 ? 2 : 3}">${esc(fieldValues[i] ?? "")}</textarea></div>`).join("")}
     <div id="dup" class="hint"></div>
     <label>標籤（用空白分隔）</label><input id="f-tags" value="${esc(tags)}" autocapitalize="none" autocomplete="off">
@@ -44,11 +88,28 @@ function buildForm(root, { mode, note, mid, did, tags = "", onChange }) {
     onChange?.();
   };
   root.oninput = refresh;
+  // 貼上圖片（截圖、複製的圖）或把檔案拖進欄位，直接上傳並插入
+  root.addEventListener("paste", (e) => {
+    const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/") || f.type.startsWith("audio/"));
+    if (file && e.target.matches("textarea")) { e.preventDefault(); attach(e.target, file); }
+  });
+  root.addEventListener("dragover", (e) => e.target.matches?.("textarea") && e.dataTransfer?.types.includes("Files") && e.preventDefault());
+  root.addEventListener("drop", (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file && e.target.matches?.("textarea")) { e.preventDefault(); attach(e.target, file); }
+  });
   root.onclick = (e) => {
-    const t = e.target.closest("[data-wrap],[data-br]");
+    const t = e.target.closest("[data-wrap],[data-br],[data-file],[data-rec]");
     if (!t) return;
     const area = t.closest(".fieldbox").querySelector("textarea");
-    if (t.dataset.wrap) wrapSelection(area, `<${t.dataset.wrap}>`, `</${t.dataset.wrap}>`);
+    if (t.dataset.file) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = t.dataset.file === "image" ? "image/*" : "audio/*";
+      input.onchange = () => input.files[0] && attach(area, input.files[0]);
+      input.click();
+    } else if ("rec" in t.dataset) recordDialog(area);
+    else if (t.dataset.wrap) wrapSelection(area, `<${t.dataset.wrap}>`, `</${t.dataset.wrap}>`);
     else wrapSelection(area, "<br>", "");
   };
   refresh();
