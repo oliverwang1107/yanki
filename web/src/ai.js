@@ -2,7 +2,7 @@
 // 免費額度每天有限，所以每位使用者每分鐘最多 12 次（只記在這個 Worker 實例的記憶體裡，是粗略的保護）。
 import { json, readJson } from "./util.js";
 
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const MODEL = "@cf/openai/gpt-oss-120b";
 const recent = new Map(); // uid → 最近的請求時間
 const LIMIT = 12;
 
@@ -46,10 +46,11 @@ export async function phraseExample(request, env, uid) {
   try {
     const out = await env.AI.run(MODEL, {
       messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
-      max_tokens: 200,
+      max_tokens: 1000, // 這個模型會先「思考」再回答，上限太小會被截斷
       temperature: 0.5,
     });
-    const ex = parseExample(typeof out?.response === "string" ? out.response : JSON.stringify(out?.response ?? ""));
+    const raw = out?.response ?? out?.choices?.[0]?.message?.content ?? out?.output_text ?? "";
+    const ex = parseExample(typeof raw === "string" ? raw : JSON.stringify(raw));
     if (!ex) return json({ error: "AI 沒有產生可用的例句" }, 502);
     return json({ ex });
   } catch (err) {
