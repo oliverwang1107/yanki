@@ -334,7 +334,14 @@ export async function mount(el, params, hooks = {}) {
     if (ph && S?.current) {
       ph.disabled = true;
       ops.addPhraseCard(ph.dataset.en, ph.dataset.zh || collocationBack(S.current), sayParts(S.current).word)
-        .then((r) => { ph.textContent = "✓"; toast(r.added ? `已加入「${ops.PHRASE_DECK}」牌組` : "這個片語已經在牌組裡了"); })
+        .then((r) => {
+          ph.textContent = "✓";
+          toast(r.added ? `已加入「${ops.PHRASE_DECK}」牌組，正在產生例句…` : "這個片語已經在牌組裡了");
+          if (!r.added) return;
+          ops.fillPhraseExample(r.note, ph.dataset.en, ph.dataset.zh)
+            .then((ok) => ok && toast("已加上例句"))
+            .catch((err) => toast(`已加入，但例句沒產生：${err.message}`, 4000));
+        })
         .catch((err) => { ph.disabled = false; toast(err.message); });
     } else if (say && S?.current) {
       const p = sayParts(S.current);

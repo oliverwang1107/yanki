@@ -2,6 +2,7 @@
 // 免費方案每個請求 CPU 只有約 10ms，所以密碼的重運算（PBKDF2）放在瀏覽器，這裡只做雜湊比對。
 import { COOKIE, authenticate, changePassword, clearCookie, inviteInfo, login, reset, signup } from "./auth.js";
 import { createInvite, joinLibrary, listLibrary, listUsers, setDisabled } from "./admin.js";
+import { phraseExample } from "./ai.js";
 import { pull, push, saveStatic, staticData } from "./data.js";
 import { authPage } from "./pages.js";
 import { json } from "./util.js";
@@ -101,6 +102,7 @@ async function handle(request, env) {
       if (path === "/api/push" && post) return push(request, env, uid);
       const m = path.match(/^\/api\/pull\/(notes|cards|revlog|dict|ink)$/);
       if (m) return pull(m[1], url, env, uid);
+      if (path === "/api/phrase-example" && post) return phraseExample(request, env, uid);
       if (path === "/api/library") return listLibrary(env, uid);
       if (path === "/api/library/join" && post) return joinLibrary(request, env, uid);
 

@@ -9,5 +9,7 @@
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
   // 音檔與圖片（5,500 多個 mp3）放在 R2，用 tools/upload_media.mjs 上傳；public/media/ 不會被部署（見 public/.assetsignore）。
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "yanki-media" }],
+  // 片語例句用 Workers AI 產生（見 src/ai.js）
+  "ai": { "binding": "AI" },
   "d1_databases": [{ "binding": "DB", "database_name": "anki-web", "database_id": "96846dff-9b35-4fc5-937b-6a4b968c18ae" }]
 }

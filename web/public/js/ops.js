@@ -148,8 +148,27 @@ export async function addPhraseCard(en, zh, sourceWord = "") {
   const fields = [front, zh.trim()];
   const exIndex = nt.fields.indexOf("例句");
   if (exIndex >= 0 && sourceWord) fields[exIndex] = `來自：${sourceWord}`;
-  await addNote({ mid: nt.id, did: deck.id, fields, tags: "字典片語" });
-  return { added: true };
+  const { note } = await addNote({ mid: nt.id, did: deck.id, fields, tags: "字典片語" });
+  return { added: true, note };
+}
+
+// 請 AI 替片語寫一句例句（英文＋中文），填進筆記的「例句」欄。失敗就保留原本的內容，之後可以手動補。
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+export async function fillPhraseExample(note, phrase, zh = "") {
+  const exIndex = index.noteTypeById.get(note.mid)?.fields.indexOf("例句") ?? -1;
+  if (exIndex < 0) return false;
+  const res = await fetch("/api/phrase-example", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phrase, zh }),
+  });
+  const out = await res.json().catch(() => null);
+  if (!res.ok || !out?.ex) throw new Error(out?.error ?? `產生例句失敗（${res.status}）`);
+  const fields = [...note.fields];
+  fields[exIndex] = `${escHtml(out.ex[0])}<br><span class="zh">${escHtml(out.ex[1])}</span>`;
+  await editNote(note, { fields });
+  return true;
 }
 
 export async function editNote(note, { fields, tags }) {

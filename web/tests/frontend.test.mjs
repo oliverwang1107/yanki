@@ -1,6 +1,7 @@
 // 前端邏輯的單元測試：node --test tests/
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
+import { parseExample } from "../src/ai.js";
 import * as core from "../public/js/core.js";
 import * as ink from "../public/js/ink.js";
 import * as ops from "../public/js/ops.js";
@@ -234,6 +235,34 @@ describe("ops", () => {
       assert.equal(again.added, false);
       assert.equal(store.notes.size, 1);
       assert.equal(store.static.decks.filter((d) => d.name === ops.PHRASE_DECK).length, 1);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  test("片語例句：解析 AI 回覆、填進例句欄", async () => {
+    assert.deepEqual(parseExample('Sure! {"en":"I look forward to it.","zh":"我很期待。"}'), ["I look forward to it.", "我很期待。"]);
+    assert.equal(parseExample('{"en":"No chinese here","zh":"none"}'), null);
+    assert.equal(parseExample("not json"), null);
+    assert.equal(parseExample('{"en":"","zh":"空的"}'), null);
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => (url === "/api/static"
+      ? { ok: true, status: 200, json: async () => ({ static_mod: 6 }) }
+      : { ok: true, status: 200, json: async () => ({ ex: ["We <look forward to> it.", "我們很期待。"] }) });
+    try {
+      const { note } = await ops.addPhraseCard("look forward to", "期待", "anticipate");
+      assert.equal(note.fields[2], "來自：anticipate");
+      assert.equal(await ops.fillPhraseExample(note, "look forward to", "期待"), true);
+      assert.equal(note.fields[2], 'We &lt;look forward to&gt; it.<br><span class="zh">我們很期待。</span>');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({ error: "AI 沒有產生可用的例句" }) });
+    try {
+      const note = [...store.notes.values()][0];
+      const before = [...note.fields];
+      await assert.rejects(() => ops.fillPhraseExample(note, "look forward to"), /AI 沒有產生/);
+      assert.deepEqual(note.fields, before, "失敗時不能動到原本的內容");
     } finally {
       globalThis.fetch = realFetch;
     }
