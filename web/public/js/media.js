@@ -94,3 +94,17 @@ export async function startRecording() {
     },
   };
 }
+
+// 匯入牌組時用：把套件裡的檔案（位元組）上傳成這個使用者的媒體。不支援的格式或太大的回傳 null（保留原本的引用）。
+const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", oga: "audio/ogg", wav: "audio/wav", webm: "audio/webm" };
+export async function uploadBytes(name, bytes) {
+  const ext = extOf(name);
+  const kind = kindOf(name);
+  if (kind === "other" || !bytes?.length) return null;
+  const file = new File([bytes], name, { type: MIME[ext] ?? "" });
+  if (kind === "image") {
+    const { blob, ext: outExt } = await shrinkImage(file);
+    return blob.size > 6 * 1024 * 1024 ? null : uploadBlob(blob, outExt);
+  }
+  return bytes.length > 12 * 1024 * 1024 ? null : uploadBlob(file, ext);
+}

@@ -129,6 +129,7 @@ export async function mount(el, arg, { sync }) {
   if (arg === "admin") return (await import("./admin.js")).mount(el);
   if (arg === "types") return (await import("./types.js")).mount(el);
   if (arg === "fsrs") return (await import("./fsrs.js")).mount(el);
+  if (arg === "import") return (await import("./import.js")).mount(el, { sync });
   setHeader({ title: "更多" });
   const me = store.me;
   const prefs = getPrefs();
@@ -136,6 +137,7 @@ export async function mount(el, arg, { sync }) {
   const stats = { notes: store.notes.size, cards: store.cards.size, decks: index.decks.length };
   el.innerHTML = `
     ${link("#/custom", "自訂複習", "用搜尋條件挑卡片複習，例如考前掃描")}
+    ${link("#/more/import", "匯入 Anki 牌組 (.apkg)", "含圖片、音檔、填空題、圖片遮蓋，可保留複習進度")}
     ${link("#/more/fsrs", "FSRS 參數最佳化", "用你自己的複習紀錄算出更準的記憶參數")}
     ${link("#/more/types", "筆記類型與版型", "正反向卡片、填空題、圖片遮蓋、欄位與版型編輯")}
     ${link(`#/browse?q=${encodeURIComponent("is:leech")}`, "頑固卡", "一直忘記的卡片 (leech)")}

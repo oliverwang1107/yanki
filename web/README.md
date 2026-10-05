@@ -4,7 +4,7 @@
 Cloudflare Worker 只負責提供頁面和存資料。全部在免費方案內。
 
 ```
-瀏覽器 ── sched.wasm（Rust fsrs ＋ Anki 的學習步驟／間隔規則）
+瀏覽器 ── sched.wasm（Rust fsrs ＋ Anki 的學習步驟／間隔規則）、fsrs_opt.wasm（參數最佳化，背景執行）
    │      IndexedDB：整份收藏 ＋ 待上傳的紀錄（離線也能複習）
    ▼
 Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm）
@@ -26,9 +26,12 @@ Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm）
 | 建立／更新牌組庫（新同學可複製的牌組，進度全新） | `node tools/seed_library.mjs local` 或 `remote` |
 | 帳號管理：邀請連結、重設密碼連結、使用者清單、停用 | `node tools/admin.mjs invite\|reset-link\|users\|disable\|enable local\|remote`（說明見檔案開頭） |
 | **FSRS 最佳化**：用 Anki 內建的最佳化工具，從你完整的複習紀錄（Anki + 網頁版）算新參數，並比較各目標記憶率的複習量；加 `--apply` 才寫入牌組設定（舊設定自動備份） | `"C:\Users\yaya\AppData\Local\AnkiProgramFiles\.venv\Scripts\python.exe" tools/fsrs_optimize.py [--retention 0.95] [--override 多益=0.97] [--apply]` |
-| 前端單元測試 | `node --test tests/frontend.test.mjs tests/quiz.test.mjs` |
+| 前端單元測試（備份還原、媒體、筆記類型、匯入、最佳化、朗讀都在裡面） | `node --test tests/*.test.mjs` |
 | 多使用者端對端測試（對本機 dev server） | `node tools/test_multiuser.mjs`（83 項：登入保護、邀請、牌組庫、資料隔離、失敗限制、停用／重設／改密碼） |
 | 重新編譯 WASM | `cd wasm && cargo build --release --target wasm32-unknown-unknown`，再複製到 `public/sched.wasm` |
+| 重新編譯最佳化用的 WASM（和 `sched.wasm` 一樣用 getrandom "unsupported" 後端） | `cd fsrs_opt && cargo build --release --target wasm32-unknown-unknown`，再複製到 `public/fsrs_opt.wasm`；`node tools/test_fsrsopt.mjs` 用你的紀錄試跑並和 Anki 的結果比較 |
+| 重新產生 .apkg 測試檔（舊／新格式、含媒體、進度、填空、圖片遮蓋） | `"C:UsersyayaAppDataLocalAnkiProgramFiles.venvScriptspython.exe" tools/make_apkg_fixtures.py`（輸出到 `tests/fixtures/`） |
+| 更新 `public/vendor/` 的 sql.js、fzstd（匯入 .apkg 用，只在匯入頁面才會載入） | `npm install` 後把 `node_modules/sql.js/dist/sql-wasm-browser.{js,wasm}` 複製成 `public/vendor/sql-wasm.{js,wasm}`、`node_modules/fzstd/esm/index.mjs` 複製成 `public/vendor/fzstd.mjs` |
 
 ## 帳號與多使用者
 
@@ -78,12 +81,15 @@ Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm）
 
 尚未完成：
 - [x] 從 Anki 匯入切換日之前的複習紀錄（`tools/sync_from_anki.py`，已用修改過的收藏副本在本機驗證，試跑正式站結果與 Anki 完全一致）
-- [ ] 備份還原
-- [ ] 使用者自己的媒體（圖片、音檔）
-- [ ] 填空題（cloze）、圖片遮蓋、筆記類型與版型編輯器、正反向卡片
-- [x] FSRS 參數最佳化（`tools/fsrs_optimize.py`，在電腦上跑；App 內的按鈕版還沒做）
-- [ ] .apkg 匯入
-- [ ] TTS 發音備援
+- [x] 備份還原：JSON 備份（含手寫標記），還原可選「合併」或「完整還原」，只寫有差異的列（`public/js/backup.js`）。同時修好了「刪除的筆記與卡片不會同步」的問題
+- [x] 使用者自己的媒體：編輯時加入圖片（自動縮圖）、音檔、錄音，貼上／拖進欄位也行；存在 R2 的 `u<uid>-<雜湊>.<副檔名>`，只有本人讀得到，每人 300MB（`src/media.js`、`public/js/media.js`）
+- [x] 筆記類型：正反向卡片、可選的反向卡片、輸入答案、填空題（`{{c1::…::提示}}`，可巢狀）、圖片遮蓋（Anki 相容格式，可用 Apple Pencil／手指／滑鼠在圖片上畫矩形與橢圓）、筆記類型與版型編輯器（欄位改名／搬移／刪除、版型新增／排序／刪除，會一併處理已有的筆記與卡片）、清除空白卡片（`public/js/cards.js`、`notetypes.js`、`views/types.js`、`views/io_editor.js`）
+- [x] FSRS 參數最佳化：App 內按一下，在瀏覽器背景用 fsrs crate 計算（`fsrs_opt/`），和預設值與現有設定比較準確度，可套用與還原；`tools/fsrs_optimize.py` 仍可在電腦上用 Anki 內建工具跑（還能算目標記憶率的複習量）
+- [x] .apkg 匯入：舊格式（anki2／anki21）與新格式（anki21b，zstd），筆記類型、牌組階層、圖片音檔、複習進度（可選）、略過重複（`public/js/apkg.js`、`importer.js`、`views/import.js`）
+- [x] 雲端發音備援：瀏覽器沒有英文語音時改用 Workers AI（MeloTTS），念過的句子存在 R2 和這台裝置上（`src/tts.js`）
+- [x] 片語例句：加進「字典片語」牌組的片語，用 Workers AI 自動寫一句例句（`src/ai.js`）
+- [x] Apple Pencil 手寫標記：複習時在答案面畫螢光、圈選，存在卡片上並同步（`public/js/ink.js`、`views/ink_layer.js`）
+- 還沒做：Anki 的負載平衡與學習步驟隨機延遲（見上面「排程正確性」）、`.colpkg`（整份收藏）匯入、`.apkg` 匯出、影片媒體、LaTeX／MathJax
 
 ## 測試
 

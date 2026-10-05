@@ -8,6 +8,8 @@
     "test:wasm": "node tools/test_wasm.mjs"
   },
   "devDependencies": {
+    "fzstd": "^0.1.1",
+    "sql.js": "^1.14.2",
     "wrangler": "^4"
   },
   "overrides": {
