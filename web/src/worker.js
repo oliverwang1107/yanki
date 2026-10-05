@@ -6,6 +6,7 @@ import { phraseExample } from "./ai.js";
 import { pull, push, saveStatic, staticData } from "./data.js";
 import { USER_MEDIA_TYPES, ownerOfKey, uploadMedia } from "./media.js";
 import { authPage } from "./pages.js";
+import { tts } from "./tts.js";
 import { json } from "./util.js";
 
 // 這幾個檔案不含任何祕密，登入頁和「加到主畫面」需要在登入前取得。
@@ -107,6 +108,7 @@ async function handle(request, env) {
       const m = path.match(/^\/api\/pull\/(notes|cards|revlog|dict|ink)$/);
       if (m) return pull(m[1], url, env, uid);
       if (path === "/api/media" && (post || request.method === "PUT")) return uploadMedia(request, env, uid);
+      if (path === "/api/tts") return tts(request, env, uid);
       if (path === "/api/phrase-example" && post) return phraseExample(request, env, uid);
       if (path === "/api/library") return listLibrary(env, uid);
       if (path === "/api/library/join" && post) return joinLibrary(request, env, uid);

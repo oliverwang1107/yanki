@@ -4,6 +4,7 @@ import * as db from "./db.js";
 import { initEngine } from "./engine.js";
 import { unburyIfNeeded } from "./ops.js";
 import { applyPrefs } from "./prefs.js";
+import { setTtsErrorHandler } from "./tts.js";
 import { pullChanges, pushChanges } from "./sync.js";
 import { $, $$, setHeader, toast } from "./ui.js";
 
@@ -128,6 +129,7 @@ async function loadMe() {
 
 async function init() {
   applyPrefs();
+  setTtsErrorHandler((msg) => toast(msg, 4000));
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   const me = await loadMe();
   if (!me) {

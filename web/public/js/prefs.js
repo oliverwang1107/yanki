@@ -4,6 +4,7 @@ export const DEFAULTS = {
   fontScale: 1, // 卡片文字大小倍率
   tts: true, // 顯示「朗讀」按鈕（瀏覽器內建的語音合成，沒有音檔的單字和例句也能聽）
   ttsRate: 0.9,
+  ttsEngine: "auto", // auto｜browser（瀏覽器內建）｜cloud（雲端發音，需要網路）
   autoSpeak: "off", // off｜word（出題時朗讀單字）｜example（翻到答案時朗讀例句）
 };
 

@@ -146,6 +146,8 @@ export async function mount(el, arg, { sync }) {
       ${ttsAvailable() ? `<label class="check"><input type="checkbox" id="p-tts"${prefs.tts ? " checked" : ""}>顯示朗讀按鈕（沒有音檔的單字、例句也能聽）</label>
       <label for="p-rate">朗讀速度</label>
       <select id="p-rate">${[[0.7, "慢"], [0.9, "正常"], [1.1, "快"]].map(([v, n]) => `<option value="${v}"${prefs.ttsRate === v ? " selected" : ""}>${n}</option>`).join("")}</select>
+      <label for="p-engine">發音來源</label>
+      <select id="p-engine">${[["auto", "自動（優先用瀏覽器內建）"], ["browser", "只用瀏覽器內建"], ["cloud", "雲端發音（需要網路）"]].map(([v, n]) => `<option value="${v}"${prefs.ttsEngine === v ? " selected" : ""}>${n}</option>`).join("")}</select>
       <label for="p-auto">自動朗讀</label>
       <select id="p-auto">${[["off", "關閉"], ["word", "出題時朗讀單字"], ["example", "翻到答案時朗讀例句"]].map(([v, n]) => `<option value="${v}"${prefs.autoSpeak === v ? " selected" : ""}>${n}</option>`).join("")}</select>
       <div class="row" style="margin-top:12px"><button class="btn" id="p-test">🔊 試聽</button></div>` : `<p class="hint">這個瀏覽器不支援語音朗讀。</p>`}
@@ -164,6 +166,7 @@ export async function mount(el, arg, { sync }) {
   el.querySelector("#p-fs").onchange = (e) => setPref("fontScale", Number(e.target.value));
   el.querySelector("#p-tts")?.addEventListener("change", (e) => setPref("tts", e.target.checked));
   el.querySelector("#p-rate")?.addEventListener("change", (e) => (setPref("ttsRate", Number(e.target.value)), speak("Practice makes perfect.")));
+  el.querySelector("#p-engine")?.addEventListener("change", (e) => (setPref("ttsEngine", e.target.value), speak("Practice makes perfect.")));
   el.querySelector("#p-auto")?.addEventListener("change", (e) => setPref("autoSpeak", e.target.value));
   el.querySelector("#p-test")?.addEventListener("click", () => speak("Practice makes perfect."));
   el.querySelector("#resync").onclick = () => sync();
