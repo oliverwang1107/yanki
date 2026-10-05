@@ -317,7 +317,13 @@ export async function mount(el, params, hooks = {}) {
   $("#card").onclick = (e) => {
     const say = e.target.closest("[data-say]");
     const snd = e.target.closest(".snd");
-    if (say && S?.current) {
+    const ph = e.target.closest(".ph-add");
+    if (ph && S?.current) {
+      ph.disabled = true;
+      ops.addPhraseCard(ph.dataset.en, ph.dataset.zh, sayParts(S.current).word)
+        .then((r) => { ph.textContent = "✓"; toast(r.added ? `已加入「${ops.PHRASE_DECK}」牌組` : "這個片語已經在牌組裡了"); })
+        .catch((err) => { ph.disabled = false; toast(err.message); });
+    } else if (say && S?.current) {
       const p = sayParts(S.current);
       speak(say.dataset.say === "word" ? p.word : p.example);
     } else if (snd) play(snd.dataset.file);

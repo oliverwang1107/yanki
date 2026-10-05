@@ -68,6 +68,9 @@ main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
 .dict-row { display: flex; gap: 10px; margin: 5px 0; }
 .dict-row b { flex: 0 0 2.6em; color: var(--muted); font-weight: 500; }
 .dict-row span { flex: 1; overflow-wrap: anywhere; }
+.ph-add { margin-left: 4px; padding: 0 7px; min-width: 26px; min-height: 22px; border: 1px solid var(--line); border-radius: 11px; background: transparent; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; vertical-align: baseline; }
+.ph-add:hover:not(:disabled) { color: var(--fg); border-color: currentColor; }
+.ph-add:disabled { opacity: .7; cursor: default; }
 .dict-row i { color: var(--muted); font-style: normal; font-size: 13px; }
 .card-meta { display: flex; gap: 12px; justify-content: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .card-meta .n { color: var(--new); } .card-meta .l { color: var(--learn); } .card-meta .d { color: var(--due); }

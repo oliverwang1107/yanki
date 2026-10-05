@@ -1,6 +1,6 @@
 // 卡片與筆記的操作（暫停、擱置、旗標、重設、改到期日、換牌組、標籤、新增／編輯／刪除）。
 // 全部直接修改記憶體裡的資料列再存檔，所以呼叫端拿到的物件永遠是最新的。
-import { QUEUE_OF_TYPE, cardsOfNote, cfgOf, cfgValue, guid, index, saveCards, saveNotes, store, today, uid } from "./core.js";
+import { QUEUE_OF_TYPE, cardsOfNote, cfgOf, cfgValue, guid, index, saveCards, saveNotes, saveStatic, store, today, uid } from "./core.js";
 
 // ---------- 標籤 ----------
 export const tagList = (note) => (note.tags ? note.tags.split(/\s+/).filter(Boolean) : []);
@@ -131,6 +131,25 @@ export async function addNote({ mid, did, fields, tags = "" }) {
   await saveNotes([note]);
   await saveCards(cards);
   return { note, cards };
+}
+
+// 複習時從字典把片語加成新卡：放進「字典片語」牌組（沒有就建立），已經加過的不重複。
+export const PHRASE_DECK = "字典片語";
+export async function addPhraseCard(en, zh, sourceWord = "") {
+  const front = en.trim();
+  let deck = store.static.decks.find((d) => d.name === PHRASE_DECK);
+  if (!deck) {
+    deck = { id: uid(), name: PHRASE_DECK, config: index.deckById.get(1)?.config ?? store.static.configs[0]?.id };
+    await saveStatic({ decks: [...store.static.decks, deck] });
+  }
+  const nt = store.static.notetypes.find((n) => n.name === "基本型+") ?? store.static.notetypes.find((n) => n.fields.length >= 2);
+  if (!nt) throw new Error("找不到可用的筆記類型");
+  if (findDuplicates(nt.id, front).length) return { added: false };
+  const fields = [front, zh.trim()];
+  const exIndex = nt.fields.indexOf("例句");
+  if (exIndex >= 0 && sourceWord) fields[exIndex] = `來自：${sourceWord}`;
+  await addNote({ mid: nt.id, did: deck.id, fields, tags: "字典片語" });
+  return { added: true };
 }
 
 export async function editNote(note, { fields, tags }) {

@@ -215,6 +215,28 @@ describe("ops", () => {
     await assert.rejects(() => ops.setDue([r], "x"), /格式/);
   });
 
+  test("從字典把片語加成新卡：自動建牌組、不重複", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ static_mod: 5 }) });
+    try {
+      const first = await ops.addPhraseCard("look forward to", "期待", "anticipate");
+      assert.equal(first.added, true);
+      const deck = store.static.decks.find((d) => d.name === ops.PHRASE_DECK);
+      assert.ok(deck, "第一次加入要建立「字典片語」牌組");
+      assert.equal(deck.config, 100);
+      const note = [...store.notes.values()][0];
+      assert.deepEqual(note.fields.slice(0, 2), ["look forward to", "期待"]);
+      assert.equal(note.fields[2], "來自：anticipate");
+      assert.equal([...store.cards.values()].find((c) => c.nid === note.id).did, deck.id);
+      const again = await ops.addPhraseCard("Look forward to ", "期待");
+      assert.equal(again.added, false);
+      assert.equal(store.notes.size, 1);
+      assert.equal(store.static.decks.filter((d) => d.name === ops.PHRASE_DECK).length, 1);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   test("新增、編輯、重複偵測、刪除", async () => {
     const { note, cards } = await ops.addNote({ mid: NT_PLUS, did: 14, fields: ["resilient", "有彈性的"], tags: "adj, new  adj" });
     assert.equal(note.tags, "adj new");
