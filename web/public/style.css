@@ -105,3 +105,24 @@ footer .primary { width: 100%; padding: 14px; min-height: 52px; border: 0; borde
 .ink-bar button.sel { background: var(--primary); border-color: var(--primary); color: #fff; }
 .ink-bar button:disabled { opacity: .4; cursor: default; }
 .inking .card-body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* 填空題、圖片遮蓋、輸入答案 */
+.cloze { font-weight: 700; color: #3b82f6; }
+.card-body .hint summary { cursor: pointer; color: var(--muted); font-size: .85em; }
+.card-body .typeans { width: min(100%, 420px); margin-top: 10px; padding: 10px 12px; font-size: inherit; text-align: center; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--fg); }
+.card-body .typeres { margin-top: 10px; font-size: .95em; }
+.typeok { color: #16a34a; font-weight: 600; }
+.typebad { color: #dc2626; text-decoration: line-through; }
+.io-stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.io-stage img { max-width: 100%; height: auto; display: block; }
+.io-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.io-header { margin-bottom: 8px; font-weight: 600; line-height: 1.4; }
+.io-extra { text-align: left; }
+.io-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; align-items: center; }
+.io-tools button { min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); color: var(--fg); cursor: pointer; }
+.io-tools button.sel { background: var(--primary); border-color: var(--primary); color: #fff; }
+.io-tools button:disabled { opacity: .4; cursor: default; }
+.io-edit-stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.io-edit-stage img { max-width: 100%; display: block; -webkit-user-drag: none; }
+.io-edit-stage svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.io-badge { position: absolute; transform: translate(-50%, -50%); color: #fff; font: 700 12px/1 sans-serif; padding: 3px 7px; border-radius: 10px; pointer-events: none; }

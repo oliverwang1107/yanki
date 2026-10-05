@@ -27,7 +27,7 @@ const wipe = ["cards", "notes", "decks", "configs", "notetypes"].map((t) => `DEL
 const sql = `
 ${rebuild ? wipe : ""}
 INSERT OR IGNORE INTO configs (uid, id, data) VALUES (0, 1, ${q(JSON.stringify(config))});
-INSERT OR IGNORE INTO notetypes (uid, id, name, fields, qfmt, afmt, css) SELECT 0, id, name, fields, qfmt, afmt, css FROM notetypes WHERE uid = 1;
+INSERT OR IGNORE INTO notetypes (uid, id, name, fields, qfmt, afmt, css, kind, tmpls) SELECT 0, id, name, fields, qfmt, afmt, css, kind, tmpls FROM notetypes WHERE uid = 1;
 INSERT OR IGNORE INTO decks (uid, id, name, config) SELECT 0, id, name, 1 FROM decks WHERE uid = 1 AND (${inLibrary});
 INSERT OR IGNORE INTO notes (uid, id, guid, mid, mod, tags, fields, deleted)
   SELECT 0, id, guid, mid, mod, TRIM(REPLACE(REPLACE(' ' || tags || ' ', ' marked ', ' '), ' leech ', ' ')), fields, 0

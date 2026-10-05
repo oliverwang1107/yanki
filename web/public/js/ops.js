@@ -1,5 +1,6 @@
 // 卡片與筆記的操作（暫停、擱置、旗標、重設、改到期日、換牌組、標籤、新增／編輯／刪除）。
 // 全部直接修改記憶體裡的資料列再存檔，所以呼叫端拿到的物件永遠是最新的。
+import { cardOrds, noCardsReason } from "./cards.js";
 import { QUEUE_OF_TYPE, cardsOfNote, cfgOf, cfgValue, guid, index, saveCards, saveNotes, saveStatic, store, today, uid } from "./core.js";
 
 // ---------- 標籤 ----------
@@ -127,7 +128,10 @@ export async function addNote({ mid, did, fields, tags = "" }) {
   if (!index.deckById.has(did)) throw new Error("請選擇牌組");
   if (!String(fields[0] ?? "").trim()) throw new Error(`「${nt.fields[0]}」欄位不能是空的`);
   const note = { id: uid(), guid: guid(), mid, mod: 0, tags: normTags(tags), fields: nt.fields.map((_, i) => String(fields[i] ?? "")), deleted: 0 };
-  const cards = [newCard(note.id, did, 0, nextNewPos())];
+  const ords = cardOrds(nt, note.fields);
+  if (!ords.length) throw new Error(noCardsReason(nt));
+  let pos = nextNewPos();
+  const cards = ords.map((ord) => newCard(note.id, did, ord, pos++));
   await saveNotes([note]);
   await saveCards(cards);
   return { note, cards };
@@ -179,6 +183,43 @@ export async function editNote(note, { fields, tags }) {
   }
   if (tags !== undefined) note.tags = normTags(tags);
   await saveNotes([note]);
+  return { added: (await syncCards([note])).added };
+}
+
+// 補上這些筆記「應該有、但還沒有」的卡片（改了欄位、新增版型之後）。不會刪除任何卡片。
+export async function syncCards(notes, { did } = {}) {
+  const fresh = [];
+  let pos = nextNewPos();
+  for (const note of notes) {
+    const nt = index.noteTypeById.get(note.mid);
+    if (!nt) continue;
+    const have = cardsOfNote(note.id);
+    const haveOrds = new Set(have.map((c) => c.ord));
+    const target = did ?? have[0]?.did;
+    if (!index.deckById.has(target)) continue;
+    for (const ord of cardOrds(nt, note.fields)) if (!haveOrds.has(ord)) fresh.push(newCard(note.id, target, ord, pos++));
+  }
+  if (fresh.length) await saveCards(fresh);
+  return { added: fresh.length };
+}
+
+// 「空白卡片」：筆記的內容已經不會再產生的卡片（例如刪掉某個填空、清空反面欄位）
+export function findEmptyCards() {
+  const out = [];
+  for (const card of store.cards.values()) {
+    const note = store.notes.get(card.nid);
+    const nt = note && index.noteTypeById.get(note.mid);
+    if (nt && !cardOrds(nt, note.fields).includes(card.ord)) out.push(card);
+  }
+  return out;
+}
+
+export async function deleteEmptyCards() {
+  const empty = findEmptyCards();
+  // 一個筆記的卡片全部是空白時，保留那些卡片（筆記本身沒內容，交給使用者自己處理）
+  const safe = empty.filter((c) => cardsOfNote(c.nid).some((x) => !empty.includes(x)));
+  if (safe.length) await deleteCards(safe);
+  return { deleted: safe.length, skipped: empty.length - safe.length };
 }
 
 // 刪除卡片；一張筆記的卡片全部被刪掉時，筆記也一併刪除。

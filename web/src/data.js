@@ -9,7 +9,7 @@ const MAX_INK = 60000; // 一張卡的手寫標記上限（字元數）
 export async function staticData(env, uid) {
   const [meta, notetypes, decks, configs, user] = await env.DB.batch([
     env.DB.prepare("SELECT k, v FROM user_meta WHERE uid = ?1").bind(uid),
-    env.DB.prepare("SELECT id, name, fields, qfmt, afmt, css FROM notetypes WHERE uid = ?1").bind(uid),
+    env.DB.prepare("SELECT id, name, fields, qfmt, afmt, css, kind, tmpls FROM notetypes WHERE uid = ?1").bind(uid),
     env.DB.prepare("SELECT id, name, config FROM decks WHERE uid = ?1").bind(uid),
     env.DB.prepare("SELECT id, data FROM configs WHERE uid = ?1").bind(uid),
     env.DB.prepare("SELECT static_mod FROM users WHERE id = ?1").bind(uid),
@@ -86,7 +86,7 @@ export async function push(request, env, uid) {
 const STATIC_REPLACE = {
   decks: ["DELETE FROM decks WHERE uid = ?1", `INSERT INTO decks (uid, id, name, config) SELECT ?1, ${["id", "name", "config"].map(J).join(", ")} FROM json_each(?2)`],
   configs: ["DELETE FROM configs WHERE uid = ?1", "INSERT INTO configs (uid, id, data) SELECT ?1, json_extract(value, '$.id'), value FROM json_each(?2)"],
-  notetypes: ["DELETE FROM notetypes WHERE uid = ?1", `INSERT INTO notetypes (uid, id, name, fields, qfmt, afmt, css) SELECT ?1, ${["id", "name", "fields", "qfmt", "afmt", "css"].map(J).join(", ")} FROM json_each(?2)`],
+  notetypes: ["DELETE FROM notetypes WHERE uid = ?1", `INSERT INTO notetypes (uid, id, name, fields, qfmt, afmt, css, kind, tmpls) SELECT ?1, ${["id", "name", "fields", "qfmt", "afmt", "css"].map(J).join(", ")}, COALESCE(json_extract(value, '$.kind'), 'standard'), json_extract(value, '$.tmpls') FROM json_each(?2)`],
 };
 
 export async function saveStatic(request, env, uid) {

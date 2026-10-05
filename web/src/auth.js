@@ -172,7 +172,7 @@ export async function signup(request, env) {
       // 起始資料：預設的牌組設定和筆記類型（從牌組庫複製）
       await env.DB.batch([
         env.DB.prepare("INSERT INTO configs (uid, id, data) SELECT ?1, id, data FROM configs WHERE uid = 0").bind(uid),
-        env.DB.prepare("INSERT INTO notetypes (uid, id, name, fields, qfmt, afmt, css) SELECT ?1, id, name, fields, qfmt, afmt, css FROM notetypes WHERE uid = 0").bind(uid),
+        env.DB.prepare("INSERT INTO notetypes (uid, id, name, fields, qfmt, afmt, css, kind, tmpls) SELECT ?1, id, name, fields, qfmt, afmt, css, kind, tmpls FROM notetypes WHERE uid = 0").bind(uid),
       ]);
     }
     await env.DB.prepare("UPDATE invites SET used_by = ?1 WHERE code_hash = ?2").bind(uid, inv.hash).run();

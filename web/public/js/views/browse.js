@@ -1,4 +1,5 @@
 // 卡片瀏覽器：用 Anki 的搜尋語法找卡片，並可批次操作（暫停、擱置、旗標、標籤、換牌組、改到期日、重設、刪除…）。
+import { kindOf, noteTitle, templatesOf } from "../cards.js";
 import { index, shortName, stripHtml, store } from "../core.js";
 import * as ops from "../ops.js";
 import { SearchError, search } from "../search.js";
@@ -20,11 +21,25 @@ const SORTS = {
   lapses: ["遺忘次數", (a, b) => b.lapses - a.lapses],
   stability: ["穩定度（小→大）", (a, b) => (a.s ?? 1e9) - (b.s ?? 1e9)],
   difficulty: ["難度（高→低）", (a, b) => (b.d ?? 0) - (a.d ?? 0)],
-  front: ["字母順序", (a, b) => String(store.notes.get(a.nid)?.fields[0]).localeCompare(String(store.notes.get(b.nid)?.fields[0]))],
+  front: ["字母順序", (a, b) => front(a).localeCompare(front(b))],
 };
 
-const front = (c) => stripHtml(store.notes.get(c.nid)?.fields[0]);
-const back = (c) => stripHtml(store.notes.get(c.nid)?.fields[1]);
+const noteType = (c) => index.noteTypeById.get(store.notes.get(c.nid)?.mid);
+const front = (c) => {
+  const note = store.notes.get(c.nid);
+  const nt = noteType(c);
+  return nt && note ? noteTitle(nt, note.fields) : "";
+};
+// 第二行：標準類型是第二個欄位；填空題是 Back Extra；圖片遮蓋顯示是第幾張卡。多版型的筆記加上版型名稱。
+const back = (c) => {
+  const note = store.notes.get(c.nid);
+  const nt = noteType(c);
+  if (!note || !nt) return "";
+  const kind = kindOf(nt);
+  const tmpls = templatesOf(nt);
+  const label = kind === "standard" ? (tmpls.length > 1 ? `[${tmpls[c.ord]?.name ?? c.ord + 1}] ` : "") : `[卡片 ${c.ord + 1}] `;
+  return label + (kind === "occlusion" ? stripHtml(note.fields[nt.fields.indexOf("Back Extra")] ?? "") : stripHtml(note.fields[1]));
+};
 
 function pickDeck(title) {
   return new Promise((resolve) => {

@@ -101,7 +101,7 @@ export async function joinLibrary(request, env, uid) {
   }
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO configs (uid, id, data) SELECT ?1, id, data FROM configs WHERE uid = 0").bind(uid),
-    env.DB.prepare("INSERT OR IGNORE INTO notetypes (uid, id, name, fields, qfmt, afmt, css) SELECT ?1, id, name, fields, qfmt, afmt, css FROM notetypes WHERE uid = 0").bind(uid),
+    env.DB.prepare("INSERT OR IGNORE INTO notetypes (uid, id, name, fields, qfmt, afmt, css, kind, tmpls) SELECT ?1, id, name, fields, qfmt, afmt, css, kind, tmpls FROM notetypes WHERE uid = 0").bind(uid),
     env.DB.prepare(`INSERT OR IGNORE INTO decks (uid, id, name, config) SELECT ?1, id, name, config FROM decks WHERE uid = 0 AND id IN (${withParents})`).bind(uid, root.name),
     env.DB.prepare(`INSERT OR IGNORE INTO notes (uid, id, guid, mid, mod, tags, fields, deleted) SELECT ?1, id, guid, mid, ?3, tags, fields, 0 FROM notes WHERE uid = 0 AND deleted = 0 AND id IN (SELECT nid FROM cards WHERE uid = 0 AND deleted = 0 AND did IN (${withCards}))`).bind(uid, root.name, t),
     env.DB.prepare(

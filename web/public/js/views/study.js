@@ -1,4 +1,5 @@
 // 複習畫面：依牌組的每日上限（或自訂搜尋）排出今天的卡，翻面、評分、撤銷，以及卡片選單。
+import { kindOf, noteTitle, stripCloze } from "../cards.js";
 import { addRevlog, cfgOf, cfgValue, dayOf, emit, index, nowSec, removeRevlog, saveCards, shortName, store, stripHtml, today } from "../core.js";
 import { getEngine } from "../engine.js";
 import * as ops from "../ops.js";
@@ -90,6 +91,9 @@ function play(file) {
 function sayParts(card) {
   const note = store.notes.get(card.nid);
   const nt = index.noteTypeById.get(note.mid);
+  const kind = kindOf(nt);
+  if (kind === "cloze") return { word: englishOf(stripCloze(note.fields[0])), example: "" };
+  if (kind === "occlusion") return { word: "", example: "" };
   const exIndex = nt.fields.indexOf("例句");
   const example = (exIndex >= 0 ? englishOf(note.fields[exIndex]) : "") || store.dict.get(card.nid)?.ex?.[0] || "";
   return { word: englishOf(note.fields[0]), example };
@@ -118,7 +122,7 @@ function draw(side) {
   const note = store.notes.get(card.nid);
   const nt = index.noteTypeById.get(note.mid);
   setCardCss(nt.css);
-  const r = renderSide(nt, note.fields, side);
+  const r = renderSide(nt, note.fields, side, card.ord, { tags: note.tags, deck: index.deckById.get(card.did)?.name ?? "", typed: S.typed });
   const dict = side === "a" && cfgValue(cfgOf(card.did), "showDictionary") ? renderDict(store.dict.get(card.nid)) : "";
   const flag = card.flags ? `<div class="cardflag" data-f="${card.flags}"></div>` : "";
   const marked = ops.tagList(note).includes("marked") ? `<span class="pill warn" style="align-self:center;margin-bottom:6px">★ 已標記</span>` : "";
@@ -130,6 +134,7 @@ function draw(side) {
 function showCard(card) {
   S.current = card;
   S.flipped = false;
+  S.typed = "";
   S.shownAt = Date.now();
   S.states = getEngine().next(card, cfgOf(card.did), elapsedDays(card));
   $("#done").hidden = true;
@@ -137,12 +142,14 @@ function showCard(card) {
   $("#show").hidden = false;
   $("#rates").hidden = true;
   const r = draw("q");
+  if (getPrefs().autoFocusType !== false) $("#card .typeans")?.focus();
   if (r.sounds.length) play(r.sounds[0]);
   else if (getPrefs().autoSpeak === "word") speak(sayParts(card).word);
 }
 
 function flip() {
   if (!S?.current || S.flipped) return;
+  S.typed = $("#card .typeans")?.value ?? ""; // {{type:…}} 輸入的答案，翻面後拿來對照
   S.flipped = true;
   const r = draw("a");
   $("#show").hidden = true;
@@ -272,7 +279,7 @@ function menu() {
       { label: "重設為新卡", onClick: async () => { if (await confirmBox("把這張卡重設為新卡？它的複習進度會被清除。", { ok: "重設" })) await run(() => ops.forgetCards([card]))(); } },
       { label: "刪除筆記", danger: true, onClick: async () => { if (await confirmBox("刪除這張筆記和它的所有卡片？", { ok: "刪除", danger: true })) await run(() => ops.deleteNotes([note]))(); } },
     ],
-    esc(stripHtml(note.fields[0])).slice(0, 40)
+    esc(noteTitle(index.noteTypeById.get(note.mid), note.fields)).slice(0, 40)
   );
 }
 
@@ -347,7 +354,10 @@ export async function mount(el, params, hooks = {}) {
       const p = sayParts(S.current);
       speak(say.dataset.say === "word" ? p.word : p.example);
     } else if (snd) play(snd.dataset.file);
-    else if (!S?.flipped) flip();
+    else if (!S?.flipped && !e.target.closest("input,textarea,summary,details")) flip();
+  };
+  $("#card").onkeydown = (e) => {
+    if (e.key === "Enter" && e.target.matches?.(".typeans")) { e.preventDefault(); flip(); }
   };
   document.addEventListener("keydown", onKey);
   nextCard();

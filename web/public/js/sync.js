@@ -57,7 +57,7 @@ export async function pullChanges(onProgress = () => {}) {
   const st = await api("/api/static");
   store.static = {
     meta: Object.fromEntries(st.meta.map((r) => [r.k, r.v])),
-    notetypes: st.notetypes.map((n) => ({ ...n, fields: JSON.parse(n.fields) })),
+    notetypes: st.notetypes.map((n) => ({ ...n, fields: JSON.parse(n.fields), kind: n.kind ?? "standard", tmpls: n.tmpls ? JSON.parse(n.tmpls) : null })),
     decks: st.decks,
     configs: st.configs.map((c) => JSON.parse(c.data)),
   };

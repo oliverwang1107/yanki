@@ -95,7 +95,7 @@ export function mountInk(cardEl, card) {
   canvas.addEventListener("pointerdown", (e) => {
     if (!on || !usable(e)) return;
     e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* 合成事件沒有對應的指標 */ }
     const [x, y] = point(e);
     if (tool === "e") {
       current = { erase: true };
