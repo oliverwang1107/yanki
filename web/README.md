@@ -84,7 +84,7 @@ Worker（src/worker.js）── 驗證 ── 靜態檔（網頁、wasm）
 - [x] 備份還原：JSON 備份（含手寫標記），還原可選「合併」或「完整還原」，只寫有差異的列（`public/js/backup.js`）。同時修好了「刪除的筆記與卡片不會同步」的問題
 - [x] 使用者自己的媒體：編輯時加入圖片（自動縮圖）、音檔、錄音，貼上／拖進欄位也行；存在 R2 的 `u<uid>-<雜湊>.<副檔名>`，只有本人讀得到，每人 300MB（`src/media.js`、`public/js/media.js`）
 - [x] 筆記類型：正反向卡片、可選的反向卡片、輸入答案、填空題（`{{c1::…::提示}}`，可巢狀）、圖片遮蓋（Anki 相容格式，可用 Apple Pencil／手指／滑鼠在圖片上畫矩形與橢圓）、筆記類型與版型編輯器（欄位改名／搬移／刪除、版型新增／排序／刪除，會一併處理已有的筆記與卡片）、清除空白卡片（`public/js/cards.js`、`notetypes.js`、`views/types.js`、`views/io_editor.js`）
-- [x] FSRS 參數最佳化：App 內按一下，在瀏覽器背景用 fsrs crate 計算（`fsrs_opt/`），和預設值與現有設定比較準確度，可套用與還原；`tools/fsrs_optimize.py` 仍可在電腦上用 Anki 內建工具跑（還能算目標記憶率的複習量）
+- [x] FSRS 參數最佳化：App 內按一下，在瀏覽器背景用 fsrs crate 計算（`fsrs_opt/`），和預設值與現有設定比較準確度，可套用與還原；另有「分牌組比較」：依頂層牌組或牌組設定各算一組專屬參數，和共用一組比，留 20% 的卡片當沒看過的測試集，差距要超過雜訊才算（`fsrsopt.js` 的 `compareSplit`），只回答「值不值得分開」，不會改任何設定；`tools/fsrs_optimize.py` 仍可在電腦上用 Anki 內建工具跑（還能算目標記憶率的複習量）
 - [x] .apkg 匯入：舊格式（anki2／anki21）與新格式（anki21b，zstd），筆記類型、牌組階層、圖片音檔、複習進度（可選）、略過重複（`public/js/apkg.js`、`importer.js`、`views/import.js`）
 - [x] 雲端發音備援：瀏覽器沒有英文語音時改用 Workers AI（MeloTTS），念過的句子存在 R2 和這台裝置上（`src/tts.js`）
 - [x] 片語例句：加進「字典片語」牌組的片語，用 Workers AI 自動寫一句例句（`src/ai.js`）

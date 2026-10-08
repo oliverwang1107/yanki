@@ -36,7 +36,66 @@ export function buildItems(revlog, dayOf) {
     }
   }
   out.sort((a, b) => a.id - b.id);
-  return { items: out.map((o) => o.reviews), cards: new Set(out.map((o) => o.cid)).size };
+  // cids 和 items 一一對應：每個序列屬於哪張卡
+  return { items: out.map((o) => o.reviews), cids: out.map((o) => o.cid), cards: new Set(out.map((o) => o.cid)).size };
+}
+
+// ---------- 分組比較：每個牌組（或設定）自己算一組參數，是不是比大家共用一組更準？ ----------
+// 專屬參數的自由度比較多，用同一批紀錄訓練再打分數一定贏，所以改用留一份測試：
+// 約 20% 的卡片（固定的雜湊，同一張卡永遠在同一邊）只拿來打分數，全域與專屬參數都只用其餘的卡片訓練。
+export const MIN_TRAIN = 100; // 一組至少要有這麼多訓練序列、測試序列才比較，再少算出來的參數沒有意義
+export const MIN_TEST = 40;
+export const DIFF_MARGIN = 0.005; // log loss 差距的最低門檻
+
+// 兩組參數在同一批測試序列上的 log loss 差距，雜訊大約是 0.11 ÷ √序列數（用性質相同的假資料量過），門檻取兩倍。
+// 測試序列少的時候，看起來有差的差距多半只是雜訊。
+export const diffMargin = (testN) => Math.max(DIFF_MARGIN, 0.22 / Math.sqrt(testN));
+
+export function isHoldout(cid) {
+  let h = (cid % 4294967291) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h ^= h >>> 16;
+  return (h >>> 0) % 5 === 0;
+}
+
+// "split" 專屬較準、"shared" 共用較準、"same" 差不多（那就共用，參數少一組比較省事也比較穩）
+export function splitVerdict(globalLoss, ownLoss, testN) {
+  const gain = globalLoss - ownLoss;
+  const margin = diffMargin(testN);
+  return gain >= margin ? "split" : gain <= -margin ? "shared" : "same";
+}
+
+// opt：loadOptimizer 的結果。groups 和 items 一一對應，是每個序列的分組代號（null 代表不獨立比較，但仍參與全域訓練）。
+// 回傳 { groups: [{ key, train, test, skipped?, global, own }], overall }，分數是 { logLoss, rmse }。
+// overall 是有比較的各組以測試序列數加權平均的 log loss：{ test, global, own }。
+export function compareSplit(opt, { items, cids, groups, opts }, onProgress = () => {}) {
+  const train = [];
+  const test = [];
+  items.forEach((it, i) => (isHoldout(cids[i]) ? test : train).push({ it, g: groups[i] }));
+  const pick = (rows, g) => rows.filter((r) => r.g === g).map((r) => r.it);
+  const keys = [...new Set(groups.filter((g) => g != null))];
+  keys.sort((a, b) => pick(train, b).length - pick(train, a).length);
+
+  onProgress("全域");
+  const globalParams = opt.optimize(train.map((r) => r.it), opts);
+  const out = [];
+  let sum = { test: 0, global: 0, own: 0 };
+  for (const [n, key] of keys.entries()) {
+    const tr = pick(train, key);
+    const te = pick(test, key);
+    if (tr.length < MIN_TRAIN || te.length < MIN_TEST) {
+      out.push({ key, train: tr.length, test: te.length, skipped: true });
+      continue;
+    }
+    onProgress(`${key}（${n + 1}/${keys.length}）`);
+    const own = opt.optimize(tr, opts);
+    const row = { key, train: tr.length, test: te.length, global: opt.evaluate(te, globalParams), own: opt.evaluate(te, own) };
+    out.push(row);
+    sum = { test: sum.test + te.length, global: sum.global + te.length * row.global.logLoss, own: sum.own + te.length * row.own.logLoss };
+  }
+  const overall = sum.test ? { test: sum.test, global: sum.global / sum.test, own: sum.own / sum.test } : null;
+  return { groups: out, overall };
 }
 
 // 打包成 wasm 要的 Int32Array：[短期記憶, 重學步驟數, n, (len, (評分, 天數)×len)×n]
